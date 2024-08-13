@@ -46,12 +46,14 @@
     workspace = {
       # Runs when a workspace is first created
       onCreate = {
-        terraform = "terraform init --upgrade";
+        terraform = ''
+          terraform init --upgrade
+          terraform apply --auto-approve
+        '';
         npm-install = "npm install";
       };
       # Runs when the workspace is (re)started
       onStart = {
-        terraform = "terraform apply --auto-approve";
         npm-start = "npm start";
       };
     };
