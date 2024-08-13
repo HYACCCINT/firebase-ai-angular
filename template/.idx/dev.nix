@@ -47,6 +47,7 @@
       # Runs when a workspace is first created
       onCreate = {
         terraform = "terraform init --upgrade";
+        npm-install = "npm install";
       };
       # Runs when the workspace is (re)started
       onStart = {
