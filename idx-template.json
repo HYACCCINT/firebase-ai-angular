@@ -1,0 +1,19 @@
+{
+    "name": "Make It So - with AI!",
+    "description": "A sample web app that demonstrates how to experiment with Firebase and Gemini AI",
+    "categories": [
+        "AI & ML",
+        "Web",
+        "Firebase"
+    ],
+    "icon": "https://www.gstatic.com/monospace/240513/logo_firebase.svg",
+    "publisher": "Google LLC",
+    "params": [
+        {
+            "id": "projectId",
+            "name": "Firebase Project ID",
+            "type": "string",
+            "required": true
+        }
+    ]
+}
