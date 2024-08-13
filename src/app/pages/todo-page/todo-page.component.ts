@@ -1,15 +1,7 @@
-import { Component, inject } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
+import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Todo, TodoService } from '../../services/todo.service';
-import { Observable } from 'rxjs';
-import { toSignal } from '@angular/core/rxjs-interop';
-import { DocumentData } from '@angular/fire/firestore';
-import {
-  FormBuilder,
-  FormGroup,
-  FormsModule,
-  ReactiveFormsModule,
-  Validators,
-} from '@angular/forms';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatButtonModule } from '@angular/material/button';
 import { MatChipsModule } from '@angular/material/chips';
@@ -23,14 +15,18 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSelectModule } from '@angular/material/select';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { AsyncPipe, CommonModule } from '@angular/common';
+import { filter, switchMap } from 'rxjs/operators';
+import { User } from '@angular/fire/auth';
+import { Timestamp } from '@angular/fire/firestore'; // Import Timestamp from Firestore
 
 @Component({
   selector: 'app-todo-page',
   standalone: true,
   imports: [
-    AsyncPipe,
     CommonModule,
     FormsModule,
+    ReactiveFormsModule,
+    MatSnackBarModule,
     MatButtonModule,
     MatMenuModule,
     MatChipsModule,
@@ -43,62 +39,98 @@ import { AsyncPipe, CommonModule } from '@angular/common';
     MatButtonToggleModule,
     MatSelectModule,
     MatCheckboxModule,
-    ReactiveFormsModule,
+    AsyncPipe,
   ],
   templateUrl: './todo-page.component.html',
-  styleUrl: './todo-page.component.scss',
+  styleUrls: ['./todo-page.component.scss'],
 })
-export class TodoPageComponent {
-  todoService = inject(TodoService);
-
+export class TodoPageComponent implements OnInit {
+  taskForm!: FormGroup;
   showEditor = false;
   selectedTaskId: string | null = null;
-  taskForm!: FormGroup;
-  editData = {
-    title: '',
-    date: '',
-    time: '',
-    description: '',
-    flagged: false,
-    priority: 'low',
-    completed: false
-  };
+  todos: Todo[] = [];
+  hasGeneratedInitialTask = false; // Flag to track if the initial task generation has occurred
 
-  constructor(private fb: FormBuilder) {}
+  constructor(
+    public todoService: TodoService,
+    private fb: FormBuilder,
+    private snackBar: MatSnackBar
+  ) {}
 
-  ngOnInit() {
-    this.taskForm = this.fb.group({
-      title: [this.editData.title, Validators.required],
-      date: [this.editData.date, Validators.required],
-      time: [this.editData.time, Validators.required],
-      description: [this.editData.description],
-      flagged: [this.editData.flagged],
-      priority: [this.editData.priority, Validators.required],
-      completed: [this.editData.completed, Validators.required],
-    });
-    console.log(this.todoService.loadTodos().subscribe((res:any) => {console.log(res);}));
+  ngOnInit(): void {
+    this.initForm();
+    this.loadTodosAndGenerateTask();
   }
 
-  async generateTask() {
+  initForm(): void {
+    const datetime = new Date();
+    this.taskForm = this.fb.group({
+      title: ['', Validators.required],
+      date: [datetime, Validators.required], // Keep date as Date object for the form
+      time: [
+        datetime.toLocaleString('en-GB', { timeZone: 'UTC' }).slice(-8, -3),
+        Validators.required,
+      ],
+      description: [''],
+      flagged: [true],
+      priority: ['low', Validators.required],
+      completed: [false],
+    });
+  }
+
+  loadTodosAndGenerateTask(): void {
+    this.todoService.user$.pipe(
+      filter((user: User | null) => !!user), // Ensure user is authenticated
+      switchMap(() => this.todoService.todos$)
+    ).subscribe({
+      next: (todos: any[]) => {
+        this.todos = todos.map(todo => {
+          const date = this.parseFirestoreTimestamp(todo.date);
+          return {
+            ...todo,
+            date: date ? this.formatDate(date) : 'Invalid Date'
+          };
+        });
+
+        if (this.todos.length === 0 && !this.hasGeneratedInitialTask) {
+          // Generate task only if no todos are loaded and we haven't generated the initial task yet
+          this.hasGeneratedInitialTask = true; // Set the flag to prevent repeated generation
+          this.generateTask();
+        }
+      },
+      error: (error: any) => {
+        console.error('Error loading todos or user state:', error);
+        this.snackBar.open('Error loading data', 'Close', { duration: 3000 });
+      },
+    });
+  }
+
+  async generateTask(): Promise<void> {
     try {
-      const generatedDataString = await this.todoService.generateTodo(this.todoService.todos); // Use await to wait for the Promise
+      const generatedDataString = await this.todoService.generateTodo();
       const generatedTodo = JSON.parse(generatedDataString);
-      this.taskForm.reset({
+      const datetime = new Date();
+      this.taskForm.patchValue({
         title: generatedTodo.title,
-        date: Date.parse(generatedTodo.date),
-        time: generatedTodo.time,
+        date: datetime, // Use Date object for form processing
+        time: datetime.toLocaleString('en-GB', { timeZone: 'UTC' }).slice(-8, -3),
         description: generatedTodo.description,
-        flagged: generatedTodo.flagged,
-        priority: generatedTodo.priority,
-        completed: false
+        flagged: generatedTodo.flagged || false,
+        priority: generatedTodo.priority.toLowerCase(),
+        completed: false,
       });
-      this.openEditor(generatedTodo);
+      this.openEditor();
     } catch (error) {
-      console.error("Failed to generate todo", error);
+      console.error('Failed to generate todo', error);
+      this.snackBar.open('Failed to generate todo', 'Close', { duration: 3000 });
     }
   }
 
-  submit() {
+  submit(): void {
+    if (this.taskForm.invalid) {
+      return;
+    }
+
     if (this.selectedTaskId) {
       this.updateTask();
     } else {
@@ -106,58 +138,68 @@ export class TodoPageComponent {
     }
   }
 
-  updateTask() {
-    if (!this.taskForm.valid || !this.selectedTaskId) {
-      return;
+  updateTask(): void {
+    if (this.selectedTaskId) {
+      this.todoService.updateTodo(this.taskForm.value, this.selectedTaskId);
+      this.resetForm();
     }
-    this.todoService.updateTodo(this.taskForm.value, this.selectedTaskId);
-    this.taskForm.reset(this.editData);
-    this.closeEditor();
   }
 
-  updateComplete(todo: any) {
-    if (!todo) {
-      return;
-    }
-    const updated = {...todo, completed: !todo.completed};
+  updateComplete(todo: Todo): void {
+    const updated = { ...todo, completed: !todo.completed };
     this.todoService.updateTodo(updated, todo.id);
   }
 
-  createTask() {
-    if (!this.taskForm.valid) {
-      return;
-    }
+  createTask(): void {
     this.todoService.addTodo(this.taskForm.value);
-    this.taskForm.reset(this.editData);
-    this.closeEditor();
+    this.resetForm();
   }
 
-  openEditor(task: any | null = null) {
+  openEditor(task: Todo | null = null): void {
     if (task) {
       this.selectedTaskId = task.id;
-      this.taskForm.reset({
-        title: task.title,
-        date: task.date,
-        time: task.time,
-        description: task.description,
-        flagged: task.flagged,
-        priority: task.priority,
-        completed: task.completed ? task.completed : false,
-      });
+      this.taskForm.patchValue(task);
     }
-
     this.showEditor = true;
   }
 
-  closeEditor() {
-    this.selectedTaskId = null;
-    this.showEditor = false;
+  closeEditor(): void {
+    this.resetForm();
   }
 
-  deleteTask(task: any) {
-    if(task && task.id) {
+  deleteTask(task: Todo): void {
+    if (task?.id) {
       this.todoService.deleteTodo(task.id);
     }
-    
+  }
+
+  private resetForm(): void {
+    this.selectedTaskId = null;
+    this.showEditor = false;
+    const datetime = new Date();
+    this.taskForm.reset({
+      title: '',
+      date: datetime, // Keep Date object for form
+      time: datetime.toLocaleString('en-GB', { timeZone: 'UTC' }).slice(-8, -3),
+      description: '',
+      flagged: true,
+      priority: 'low',
+      completed: false,
+    });
+  }
+
+  private formatDate(date: Date): string {
+    return date.toLocaleDateString('en-US', { // Format date to mm/dd/yyyy for display
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+  }
+
+  private parseFirestoreTimestamp(timestamp: any): Date | null {
+    if (timestamp instanceof Timestamp) {
+      return timestamp.toDate();
+    }
+    return null;
   }
 }

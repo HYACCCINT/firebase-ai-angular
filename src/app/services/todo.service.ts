@@ -7,10 +7,9 @@ import {
   signOut,
   User,
 } from '@angular/fire/auth';
-import { Subscription } from 'rxjs';
+import { Observable, BehaviorSubject, of } from 'rxjs';
 import {
   doc,
-  DocumentReference,
   Firestore,
   setDoc,
   collection,
@@ -18,19 +17,20 @@ import {
   collectionData,
   query,
   orderBy,
-  DocumentData,
 } from '@angular/fire/firestore';
 import { Router } from '@angular/router';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { environment } from '../../environments/environments';
+import { tap } from 'rxjs/operators';
 
 type Priority = 'high' | 'medium' | 'low';
 
 export type Todo = {
+  id: string;
   title: string;
   description?: string | null;
-  date: any;
-  time: number;
+  date: Date;
+  time: string;
   completed: boolean;
   flagged: boolean;
   priority: Priority;
@@ -40,9 +40,9 @@ export type Todo = {
   providedIn: 'root',
 })
 export class TodoService {
-  firestore: Firestore = inject(Firestore);
-  auth: Auth = inject(Auth);
-  router: Router = inject(Router);
+  private firestore = inject(Firestore);
+  private auth = inject(Auth);
+  private router = inject(Router);
   private genAI = new GoogleGenerativeAI(environment.gemini_api);
   private model = this.genAI.getGenerativeModel({
     model: 'gemini-1.5-flash',
@@ -50,131 +50,130 @@ export class TodoService {
   });
   private provider = new GoogleAuthProvider();
 
-  // observable that is updated when the auth state changes
   user$ = authState(this.auth);
-  currentUser: User | null = this.auth.currentUser;
-  userSubscription: Subscription;
-  todos: any[] = [];
+  private todosSubject = new BehaviorSubject<Todo[]>([]);
+  todos$ = this.todosSubject.asObservable(); // Observable for components to subscribe to
+  currentUser: User | null = null;
 
   constructor() {
-    this.userSubscription = this.user$.subscribe((aUser: User | null) => {
-      this.currentUser = aUser;
-    });
-    this.loadTodos().subscribe((res: any[]) => {
-      this.todos = res.map(todo => {
-        return {...todo, date: new Date(todo.date)}
-      })
+    this.user$.subscribe((user: User | null) => {
+      this.currentUser = user;
+      if (user) {
+        this.loadTodos().subscribe((todos) => {
+          this.todosSubject.next(todos);
+        });
+      } else {
+        this.todosSubject.next([]); // Clear todos when user logs out
+      }
     });
   }
 
-  generateTodo = async (todos: any) => {
-    const prompt = `generate a todo based on ${
-      todos.length > 0
-        ? `tasks that should follow after these existing todos ${JSON.stringify(
-            todos
+  async generateTodo(): Promise<string> {
+    const activeTodos = this.todosSubject
+      .getValue()
+      .filter((todo) => !todo.completed);
+    const prompt = `provide a suggested todo that someone ${
+      activeTodos.length > 0
+        ? `should follow up after completing this todo ${JSON.stringify(
+            activeTodos[0]
           )}`
-        : `a random todo`
-    } using this JSON schema:
-  { "type": "object",
-    "properties": {
-      "title": { "type": "string" },
-      "description": { "type": "string" },
-      "priority": { "type": "string" },
+        : `creating a todo list today might want to do`
+    } using this JSON schema: { "type": "object", "properties": { "title": { "type": "string" }, "description": { "type": "string" }, "priority": { "type": "string" }, } }`;
+    try {
+      const result = await this.model.generateContent(prompt);
+      return result.response.text();
+    } catch (error) {
+      console.error('Failed to generate todo', error);
+      throw error;
     }
-  }`;
-    let result = await this.model.generateContent(prompt);
-    return result.response.text();
-  };
-
-  login() {
-    signInWithPopup(this.auth, this.provider).then((result) => {
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      this.router.navigate(['/', 'todo']);
-      return credential;
-    });
   }
 
-  logout() {
+  login(): void {
+    signInWithPopup(this.auth, this.provider)
+      .then((result) => {
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        this.router.navigate(['/', 'todo']);
+        return credential;
+      })
+      .catch((error) => console.error('Login error:', error));
+  }
+
+  logout(): void {
     signOut(this.auth)
       .then(() => {
         this.router.navigate(['/', 'login']);
-        console.log('signed out');
+        console.log('Signed out');
       })
-      .catch((error) => {
-        console.log('sign out error: ' + error);
-      });
+      .catch((error) => console.error('Sign out error:', error));
   }
 
-  // Reads user's todos.
-  loadTodos = () => {
+  loadTodos(): Observable<Todo[]> {
     if (!this.currentUser) {
-      return;
+      return of([]); // Return an empty observable if no user is signed in
     }
-    // Create the query to load the last 12 messages and listen for new ones.
-    const todoquery = query(
+
+    const todoQuery = query(
       collection(this.firestore, this.currentUser.uid),
       orderBy('timeCreated', 'desc')
     );
-    // Start listening to the query.
-    return collectionData(todoquery);
-  };
 
-  // Add a todo to Cloud Firestore.
-  addTodo = async (
-    todoData: Todo
-  ): Promise<void | DocumentReference<DocumentData>> => {
-    if (this.currentUser == null) {
+    return collectionData(todoQuery, { idField: 'id' }) as Observable<Todo[]>;
+  }
+
+  async addTodo(todoData: Todo): Promise<void> {
+    if (!this.currentUser) {
       console.log('addTodo requires a signed-in user');
       return;
     }
-    const date = todoData.date.toDateString();
-    console.log(date, "date");
+
     try {
       const newTodoRef = doc(collection(this.firestore, this.currentUser.uid));
       const todo = {
         ...todoData,
-        date: date,
+        date: todoData.date,
         userId: this.currentUser.uid,
         timeCreated: Date.now(),
         id: newTodoRef.id,
       };
-      return await setDoc(newTodoRef, todo);
+      await setDoc(newTodoRef, todo);
+      this.refreshTodos();
     } catch (error) {
       console.error('Error writing new todo to Firebase Database', error);
-      return;
     }
-  };
+  }
 
-  updateTodo = async (
-    todoData: any,
-    id: string
-  ): Promise<void | DocumentReference<DocumentData>> => {
-    if (this.currentUser === null) {
+  async updateTodo(todoData: Todo, id: string): Promise<void> {
+    if (!this.currentUser) {
       console.log('updateTodo requires a signed-in user');
       return;
     }
-    
+
     try {
-      const date = todoData.date.toDateString();
-      const todo = { ...todoData, date: date, userId: this.currentUser.uid };
-      const newTodoRef = await setDoc(
-        doc(this.firestore, this.currentUser.uid, id),
-        todo
-      );
-      return newTodoRef;
+      const todo = { ...todoData, userId: this.currentUser.uid };
+      await setDoc(doc(this.firestore, this.currentUser.uid, id), todo);
+      this.refreshTodos();
     } catch (error) {
       console.error('Error updating todo to Firebase Database', error);
-      return;
     }
-  };
+  }
 
-  deleteTodo = async (
-    id: string
-  ): Promise<void | DocumentReference<DocumentData>> => {
-    if (this.currentUser === null) {
+  async deleteTodo(id: string): Promise<void> {
+    if (!this.currentUser) {
       console.log('deleteTodo requires a signed-in user');
       return;
     }
-    return await deleteDoc(doc(this.firestore, this.currentUser.uid, id));
-  };
+
+    try {
+      await deleteDoc(doc(this.firestore, this.currentUser.uid, id));
+      this.refreshTodos();
+    } catch (error) {
+      console.error('Error deleting todo from Firebase Database', error);
+    }
+  }
+
+  private refreshTodos(): void {
+    this.loadTodos().subscribe((todos) => {
+      this.todosSubject.next(todos);
+    });
+  }
 }
