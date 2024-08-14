@@ -47,4 +47,3 @@ Thumbs.db
 .runtimeconfig.json
 
 .terraform/
-env.json

@@ -16,7 +16,8 @@
     GOOGLE_PROJECT = "<project-id>";
     CLOUDSDK_CORE_PROJECT = "<project-id>";
     TF_VAR_project = "<project-id>";
-    NG_CLI_ANALYTICS="false";
+    # Flip to true to help improve Angular
+    NG_CLI_ANALYTICS = "false";
   };
 
   idx = {
