@@ -20,6 +20,11 @@ variable "project" {
   type = string
 }
 
+# For project ID <-> project number conversion
+data "google_project" "project" {
+  project_id = var.project
+}
+
 resource "google_project_service" "services" {
   for_each = toset([
     "serviceusage.googleapis.com",
@@ -99,20 +104,12 @@ resource "google_firebaserules_release" "firestore" {
 resource "google_firebase_web_app" "example" {
   project = var.project
 
-  display_name    = "Make It So AI!"
-  deletion_policy = "DELETE"
+  display_name = "Make It So AI!"
 }
 
 data "google_firebase_web_app_config" "example" {
   project    = var.project
   web_app_id = google_firebase_web_app.example.app_id
-}
-
-resource "local_file" "api_key" {
-  content = jsonencode({
-    GEN_AI_API_KEY = google_apikeys_key.generativelanguage.key_string
-  })
-  filename = "${path.module}/env.json"
 }
 
 resource "local_file" "firebaserc" {
@@ -122,4 +119,15 @@ resource "local_file" "firebaserc" {
     }
   })
   filename = "${path.module}/.firebaserc"
+}
+
+resource "local_file" "environment_ts" {
+  content = templatefile("${path.module}/src/environments/environments.ts.tmpl", merge(
+    data.google_firebase_web_app_config.example,
+    {
+      project_id     = data.google_project.project.project_id,
+      gemini_api_key = google_apikeys_key.generativelanguage.key_string
+    }
+  ))
+  filename = "${path.module}/src/environments/environments.ts"
 }
