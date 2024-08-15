@@ -41,7 +41,7 @@ export class TodoService {
   private firestore = inject(Firestore);
   private auth = inject(Auth);
   private router = inject(Router);
-  private genAI = new GoogleGenerativeAI(environment.gemini_api);
+  private genAI = new GoogleGenerativeAI(environment.gemini_api_key);
   private model = this.genAI.getGenerativeModel({
     model: 'gemini-1.5-flash',
     generationConfig: { responseMimeType: 'application/json' },
