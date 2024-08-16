@@ -50,14 +50,12 @@
       onCreate = {
         terraform = ''
           terraform init --upgrade
-          terraform apply --auto-approve
+          terraform apply -parallelism=20 --auto-approve
         '';
-        npm-install = "npm install";
+        npm = "npm install";
       };
       # Runs when the workspace is (re)started
-      onStart = {
-        npm-start = "npm start";
-      };
+      onStart = {};
     };
   };
 }

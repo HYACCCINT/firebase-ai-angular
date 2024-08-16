@@ -39,9 +39,9 @@ resource "google_project_service" "services" {
   disable_on_destroy = false
 }
 
-# generativelanguage.googleapis.com is designed for experimentation only. A low initial quota is set to protect the project
-# in case you accidentally used it in production. To use Gemini AI in a production environment, migrate to Vertex AI in
-# Firebase https://firebase.google.com/docs/vertex-ai/migrate-to-vertex-ai
+# generativelanguage.googleapis.com is designed for experimentation only. A low initial quota
+# is set to protect the project. To use Gemini AI in a production environment, migrate to Vertex AI in
+# Firebase. See prod.tf for more details.
 resource "google_service_usage_consumer_quota_override" "generativelanguage" {
   project        = var.project
   service        = "generativelanguage.googleapis.com"
@@ -50,7 +50,7 @@ resource "google_service_usage_consumer_quota_override" "generativelanguage" {
   override_value = "10"
   force          = true
 
-  depends_on = [google_project_service.services]
+  depends_on = [google_project_service.services["generativelanguage.googleapis.com"]]
 }
 
 resource "google_apikeys_key" "generativelanguage" {
@@ -69,7 +69,7 @@ resource "google_apikeys_key" "generativelanguage" {
     }
   }
 
-  depends_on = [google_project_service.services]
+  depends_on = [google_project_service.services["apikeys.googleapis.com"]]
 }
 
 resource "google_firestore_database" "database" {
@@ -126,7 +126,8 @@ resource "local_file" "environment_ts" {
     data.google_firebase_web_app_config.example,
     {
       project_id     = data.google_project.project.project_id,
-      gemini_api_key = google_apikeys_key.generativelanguage.key_string
+      gemini_api_key = google_apikeys_key.generativelanguage.key_string,
+      debug_token    = "" # Use local.uuid4 in when using Vertex AI in Firebase
     }
   ))
   filename = "${path.module}/src/environments/environments.ts"
