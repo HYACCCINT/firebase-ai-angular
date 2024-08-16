@@ -59,7 +59,7 @@ export class TodoService {
         // User is authenticated
         this.localUid = user.uid;
       } else {
-        // User is not authenticated; generate a local UID if not already set
+        // User is not authenticated
         if (!this.localUid) {
           this.localUid = this.generateLocalUid();
         }
@@ -69,7 +69,6 @@ export class TodoService {
       });
     });
 
-    // Attempt to sign in anonymously
     this.login();
   }
 
@@ -143,7 +142,6 @@ export class TodoService {
 
   async updateTodo(todoData: Todo, id: string): Promise<void> {
     const userId = this.currentUser?.uid || this.localUid || this.generateLocalUid();
-
     if (!userId) {
       console.log('updateTodo requires a user ID');
       return;
