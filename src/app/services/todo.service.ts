@@ -6,6 +6,8 @@ import {
   signOut,
   User,
 } from '@angular/fire/auth';
+import { getApp } from '@angular/fire/app';
+
 import { Observable, BehaviorSubject, of } from 'rxjs';
 import {
   doc,
@@ -20,6 +22,7 @@ import {
 import { Router } from '@angular/router';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { environment } from '../../environments/environments';
+import { getVertexAI, getGenerativeModel } from "firebase/vertexai-preview";
 
 type Priority = 'high' | 'medium' | 'low';
 
@@ -34,6 +37,19 @@ export type Todo = {
   priority: Priority;
 };
 
+const MODEL_CONFIG = {
+  model: 'gemini-1.5-flash',
+  generationConfig: { responseMimeType: 'application/json' },
+  systemInstruction: `Use this JSON schema: ${JSON.stringify({
+    "type": "object",
+    "properties": {
+      "title": { "type": "string" },
+      "description": { "type": "string" },
+      "priority": { "type": "string" },
+    }
+  })}`
+};
+
 @Injectable({
   providedIn: 'root',
 })
@@ -41,19 +57,14 @@ export class TodoService {
   private firestore = inject(Firestore);
   private auth = inject(Auth);
   private router = inject(Router);
+
+  private vertexAI = getVertexAI(getApp());
+  // Caveat: the VertexAI model may take a while (~10s) to initialize after your 
+  // first call to GenerateContent(). You may see a PERMISSION_DENIED error before then.
+  private prodModel = getGenerativeModel(this.vertexAI, MODEL_CONFIG);
+
   private genAI = new GoogleGenerativeAI(environment.gemini_api_key);
-  private model = this.genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
-    generationConfig: { responseMimeType: 'application/json' },
-    systemInstruction: `Use this JSON schema: ${JSON.stringify({
-      "type": "object",
-      "properties": {
-        "title": { "type": "string" },
-        "description": { "type": "string" },
-        "priority": { "type": "string" },
-      }
-    })}`
-  });
+  private experimentModel = this.genAI.getGenerativeModel(MODEL_CONFIG);
 
   user$ = authState(this.auth);
   private todosSubject = new BehaviorSubject<Todo[]>([]);
@@ -84,7 +95,7 @@ export class TodoService {
       : `creating a todo list today might want to do`
       }`;
     try {
-      const result = await this.model.generateContent(prompt);
+      const result = await this.experimentModel.generateContent(prompt);
       return result.response.text();
     } catch (error) {
       console.error('Failed to generate todo', error);
