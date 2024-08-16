@@ -50,7 +50,7 @@ resource "google_service_usage_consumer_quota_override" "generativelanguage" {
   override_value = "10"
   force          = true
 
-  depends_on = [google_project_service.services]
+  depends_on = [google_project_service.services["generativelanguage.googleapis.com"]]
 }
 
 resource "google_apikeys_key" "generativelanguage" {
@@ -69,7 +69,7 @@ resource "google_apikeys_key" "generativelanguage" {
     }
   }
 
-  depends_on = [google_project_service.services]
+  depends_on = [google_project_service.services["apikeys.googleapis.com"]]
 }
 
 resource "google_firestore_database" "database" {
