@@ -45,6 +45,14 @@ export class TodoService {
   private model = this.genAI.getGenerativeModel({
     model: 'gemini-1.5-flash',
     generationConfig: { responseMimeType: 'application/json' },
+    systemInstruction: `Use this JSON schema: ${JSON.stringify({
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "priority": { "type": "string" },
+      }
+    })}`
   });
 
   user$ = authState(this.auth);
@@ -69,13 +77,12 @@ export class TodoService {
     const activeTodos = this.todosSubject
       .getValue()
       .filter((todo) => !todo.completed);
-    const prompt = `provide a suggested todo that someone ${
-      activeTodos.length > 0
-        ? `should follow up after completing this todo ${JSON.stringify(
-            activeTodos[0]
-          )}`
-        : `creating a todo list today might want to do`
-    } using this JSON schema: { "type": "object", "properties": { "title": { "type": "string" }, "description": { "type": "string" }, "priority": { "type": "string" }, } }`;
+    const prompt = `provide a suggested todo that someone ${activeTodos.length > 0
+      ? `should follow up after completing these todos ${JSON.stringify(
+        activeTodos.map((todo) => todo.title)
+      )}`
+      : `creating a todo list today might want to do`
+      }`;
     try {
       const result = await this.model.generateContent(prompt);
       return result.response.text();
@@ -87,9 +94,9 @@ export class TodoService {
 
   login(): void {
     signInAnonymously(this.auth).then((result) => {
-        this.router.navigate(['/', 'todo']);
-        return;
-      })
+      this.router.navigate(['/', 'todo']);
+      return;
+    })
       .catch((error) => console.error('Login error:', error));
   }
 
