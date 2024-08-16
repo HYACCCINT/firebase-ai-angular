@@ -1,5 +1,147 @@
 <div class="site-layout">
-  <div class="container">
-</div>
-  <router-outlet />
+  <div class="container"></div>
+  <div class="min-h-[100vh] h-full w-full py-10 flex bg-gray-50">
+    <div class="flex flex-col space-y-4 p-6 w-full">
+      <div class="flex justify-between items-center mb-4">
+        <span
+          class="text-3xl font-light mt-5 text-amber-800 font-pixel text-center"
+          >MAKE IT SO</span
+        >
+        <!-- <h1 class="text-2xl font-bold text-gray-900">MAKE IT SO</h1> -->
+
+        <button mat-icon-button [matMenuTriggerFor]="settingsMenu">
+          <mat-icon class="text-gray-600 material-icons-outlined"
+            >settings</mat-icon
+          >
+        </button>
+        <mat-menu #settingsMenu="matMenu">
+          <button
+            mat-menu-item
+            class="text-gray-800 hover:bg-gray-100"
+            (click)="this.todoService.logout()"
+          >
+            Sign Out
+          </button>
+        </mat-menu>
+      </div>
+
+      @for (todo of todos; track todo.id) {
+      <div
+        class="flex items-center space-x-3 p-4 bg-white rounded-lg shadow mb-3"
+      >
+        <mat-checkbox
+          (click)="updateComplete(todo)"
+          value="todo.completed"
+          class="text-orange-500"
+        ></mat-checkbox>
+        <div
+          class="flex-grow {{
+            todo.completed ? 'text-decoration-line: line-through' : ''
+          }}"
+        >
+          <p class="font-medium text-gray-800">{{ todo.title }}</p>
+          <p class="text-sm text-gray-500">
+            {{ todo.date }}
+          </p>
+        </div>
+        <mat-chip class="px-3 py-1 text-white text-sm font-bold rounded-full">
+          {{ todo.priority }}
+        </mat-chip>
+        <button mat-icon-button [matMenuTriggerFor]="taskMenu">
+          <mat-icon>more_vert</mat-icon>
+        </button>
+        <mat-menu #taskMenu="matMenu">
+          <button mat-menu-item (click)="openEditor(todo)">
+            <mat-icon class="text-gray-600 material-icons-outlined"
+              >edit</mat-icon
+            >
+            Edit
+          </button>
+          <button mat-menu-item>
+            <mat-icon class="text-gray-600 material-icons-outlined"
+              >flag</mat-icon
+            >
+            Flag
+          </button>
+          <button mat-menu-item (click)="deleteTask(todo)">
+            <mat-icon class="text-gray-600 material-icons-outlined"
+              >delete</mat-icon
+            >
+            Delete
+          </button>
+        </mat-menu>
+      </div>
+      }
+
+      <button
+        class="bg-pink-500 hover:bg-pink-600 text-white font-bold py-2 px-4 rounded w-full flex items-center justify-center"
+        (click)="generateTask()"
+      >
+        <mat-icon class="mr-2 text-white">add</mat-icon>
+        GENERATE TASK
+      </button>
+    </div>
+
+    @if (showEditor) {
+    <div
+      class="w-full md:w-1/2 p-6 bg-white transition-all duration-300 ease-in-out border border-gray-300 rounded-lg"
+    >
+      <button (click)="closeEditor()" class="absolute top-4 right-4">
+        <mat-icon>close</mat-icon>
+      </button>
+
+      <h2 class="text-xl font-bold mb-4">
+        {{ selectedTaskId ? "Edit Task" : "New Task" }}
+      </h2>
+
+      <form [formGroup]="taskForm" (ngSubmit)="submit()" ngNativeValidate>
+        <mat-form-field class="w-full mb-4">
+          <mat-label>Title</mat-label>
+          <input
+            matInput
+            formControlName="title"
+            placeholder="Develop the app"
+          />
+        </mat-form-field>
+
+        <div class="flex space-x-4 mb-4">
+          <mat-form-field>
+            <mat-label>Date</mat-label>
+            <input matInput [matDatepicker]="picker" formControlName="date" />
+            <mat-datepicker-toggle
+              matSuffix
+              [for]="picker"
+            ></mat-datepicker-toggle>
+            <mat-datepicker #picker></mat-datepicker>
+          </mat-form-field>
+          <mat-form-field>
+            <mat-label>Time</mat-label>
+            <input matInput type="time" formControlName="time" />
+          </mat-form-field>
+        </div>
+
+        <mat-form-field class="w-full mb-4">
+          <mat-label>Description</mat-label>
+          <textarea
+            matInput
+            formControlName="description"
+            placeholder="Quickly make a sample app..."
+          ></textarea>
+        </mat-form-field>
+        <div class="flex items-center mb-4 justify-between">
+          <span>Priority</span>
+          <mat-button-toggle-group formControlName="priority" class="mb-4">
+            <mat-button-toggle value="high">High</mat-button-toggle>
+            <mat-button-toggle value="medium">Medium</mat-button-toggle>
+            <mat-button-toggle value="low">Low</mat-button-toggle>
+          </mat-button-toggle-group>
+        </div>
+        <mat-slide-toggle formControlName="flagged">Flag</mat-slide-toggle>
+        <div class="flex justify-end">
+          <button mat-raised-button color="primary" type="submit">Save</button>
+        </div>
+      </form>
+    </div>
+    }
+  </div>
 </div>
