@@ -9,5 +9,5 @@ export const environment = {
       appId: 'APP_ID',
       measurementId: 'G-MEASUREMENT_ID',
     },
-    gemini_api: 'your_api_key'
+    gemini_api_key: 'your_api_key'
   };
