@@ -55,9 +55,7 @@
         npm = "npm install";
       };
       # Runs when the workspace is (re)started
-      onStart = {
-        npm = "npm start";
-      };
+      onStart = {};
     };
   };
 }

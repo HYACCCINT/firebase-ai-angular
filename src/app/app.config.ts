@@ -24,16 +24,17 @@ export const appConfig: ApplicationConfig = {
     provideFirebaseApp(() =>
       initializeApp(environment.firebase)
     ),
-    provideAppCheck(() => {
+    // Turn on app check for Vertex AI in Firebase
+    // provideAppCheck(() => {
       // TODO: don't use debug token in prod
-      self.FIREBASE_APPCHECK_DEBUG_TOKEN = environment.debug_token;
+      // self.FIREBASE_APPCHECK_DEBUG_TOKEN = environment.debug_token;
 
-      const appCheck = initializeAppCheck(getApp(), {
-        provider: new ReCaptchaEnterpriseProvider("your site key here"),
-        isTokenAutoRefreshEnabled: true,
-      });
-      return appCheck;
-    }),
+      // const appCheck = initializeAppCheck(getApp(), {
+      //   provider: new ReCaptchaEnterpriseProvider("your site key here"),
+      //   isTokenAutoRefreshEnabled: true,
+      // });
+      // return appCheck;
+    // }),
     provideAuth(() => getAuth()),
     provideFirestore(() => getFirestore()), provideAnimationsAsync(),
   ],
