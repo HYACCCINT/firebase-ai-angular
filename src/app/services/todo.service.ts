@@ -19,7 +19,6 @@ import {
   query,
   orderBy,
   Timestamp,
-  writeBatch,
   where,
   updateDoc,
 } from '@angular/fire/firestore';
@@ -295,42 +294,42 @@ export class TodoService {
     }
   }
   
-
-
   async deleteMainTaskAndSubtasks(mainTaskId: string): Promise<void> {
-    const batch = writeBatch(this.firestore);
-
     try {
-      const subtasks = await this.loadSubtasks(mainTaskId);
-      subtasks.forEach((subtask) => {
-        const subtaskRef = doc(this.firestore, 'todos', 'any');
-        batch.delete(subtaskRef);
+      // First, load the subtasks for the main task
+      const subtasksObservable = await this.loadSubtasks(mainTaskId);
+  
+      subtasksObservable.subscribe(async (subtasks) => {
+        // Delete each subtask individually
+        for (const subtask of subtasks) {
+          const subtaskRef = doc(this.firestore, 'todos', subtask.id);
+          await deleteDoc(subtaskRef);
+        }
+  
+        // Delete the main task after deleting its subtasks
+        const mainTaskRef = doc(this.firestore, 'todos', mainTaskId);
+        await deleteDoc(mainTaskRef);
+  
+        // Refresh the task list after deletion
+        this.refreshTodos();
       });
-
-      const mainTaskRef = doc(this.firestore, 'todos', mainTaskId);
-      batch.delete(mainTaskRef);
-
-      await batch.commit();
-      this.refreshTodos();
     } catch (error) {
       console.error('Error deleting main task and subtasks from Firestore', error);
     }
   }
+  
+  
 async updateTodoAndSubtasks(mainTask: Todo, subtasks: Todo[]): Promise<void> {
   try {
     // Update the main task
     const mainTaskRef = doc(this.firestore, 'todos', mainTask.id);
     await setDoc(mainTaskRef, mainTask, { merge: true });
-    console.log('Main task updated successfully:', mainTask);
 
     // Update each subtask individually
     for (const subtask of subtasks) {
       const subtaskRef = doc(this.firestore, 'todos', subtask.id);
       await setDoc(subtaskRef, subtask, { merge: true });
-      console.log('Subtask updated successfully:', subtask);
     }
-
-    console.log('All updates and deletions completed successfully');
   } catch (error) {
     console.error('Error updating/deleting tasks and subtasks', error);
     throw error;
@@ -356,26 +355,6 @@ async updateTodoAndSubtasks(mainTask: Todo, subtasks: Todo[]): Promise<void> {
     }
   }
 
-// Add both main task and subtasks to Firestore
-// async addMainTaskWithSubtasks(mainTask: Todo, subtasks: Todo[]): Promise<void> {
-//   const batch = writeBatch(this.firestore);
-
-//   try {
-//     const mainTaskRef = doc(this.firestore, 'todos', mainTask.id);
-//     batch.set(mainTaskRef, mainTask);
-
-//     subtasks.forEach(subtask => {
-//       const subtaskRef = doc(this.firestore, 'todos', subtask.id);
-//       batch.set(subtaskRef, subtask);
-//     });
-
-//     await batch.commit();
-//     console.log('Batch add completed successfully');
-//   } catch (error) {
-//     console.error('Error adding main task and subtasks', error);
-//     throw error;
-//   }
-// }
 
   async loadSubtasks(mainTaskId: string): Promise<Observable<Todo[]>> {
     const subtaskQuery = query(
@@ -389,7 +368,6 @@ async updateTodoAndSubtasks(mainTask: Todo, subtasks: Todo[]): Promise<void> {
     try {
       const subtaskRef = doc(this.firestore, 'todos', subtask.id);
       await setDoc(subtaskRef, subtask);
-      console.log('Subtask added successfully');
     } catch (error) {
       console.error('Error adding subtask', error);
       throw error;

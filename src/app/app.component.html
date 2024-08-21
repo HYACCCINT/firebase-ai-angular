@@ -67,11 +67,11 @@
               <mat-chip
                 class="px-3 py-1 text-white text-sm font-bold rounded-full"
                 [ngClass]="{
-                  'bg-red-200 text-red-800': todo.mainTask.priority === 'high',
+                  'bg-red-200 text-red-800': todo.mainTask.priority.toLowerCase() === 'high',
                   'bg-yellow-200 text-yellow-800':
-                    todo.mainTask.priority === 'medium',
+                    todo.mainTask.priority.toLowerCase() === 'medium',
                   'bg-green-200 text-green-800':
-                    todo.mainTask.priority === 'low'
+                    todo.mainTask.priority.toLowerCase() === 'low'
                 }"
               >
                 {{ todo.mainTask.priority | titlecase }}
@@ -167,10 +167,10 @@
         <div class="flex items-center mb-4 justify-between">
           <span>Priority</span>
           <mat-button-toggle-group formControlName="priority" class="mb-4">
-            <mat-button-toggle value="high">High</mat-button-toggle>
-            <mat-button-toggle value="medium">Medium</mat-button-toggle>
-            <mat-button-toggle value="low">Low</mat-button-toggle>
-            <mat-button-toggle value="none">None</mat-button-toggle>
+            <mat-button-toggle value="High">High</mat-button-toggle>
+            <mat-button-toggle value="Medium">Medium</mat-button-toggle>
+            <mat-button-toggle value="Low">Low</mat-button-toggle>
+            <mat-button-toggle value="None">None</mat-button-toggle>
           </mat-button-toggle-group>
         </div>
         <mat-slide-toggle formControlName="flagged">Flag</mat-slide-toggle>
@@ -185,7 +185,7 @@
               placeholder="New subtask title"
               class="w-full p-2 border rounded"
             />
-            <button mat-raised-button color="primary" (click)="addSubtask()">
+            <button mat-raised-button color="primary" (click)="addSubtask(); $event.stopPropagation(); $event.preventDefault();">
               +
             </button>
           </div>
@@ -193,7 +193,7 @@
             <button
               mat-raised-button
               color="accent"
-              (click)="imageInput.click()"
+              (click)="moreSubtaskInput.click(); $event.stopPropagation(); $event.preventDefault();"
             >
               <mat-icon class="mr-2">add_a_photo</mat-icon>
               Generate Subtasks from Image
@@ -203,9 +203,10 @@
               accept="image/*"
               (change)="generateMoreSubtasksFromImage($event)"
               hidden
-              #imageInput
+              #moreSubtaskInput
             />
           </div>
+          
           <ul class="mt-4 space-y-2">
             @for (subtask of this.subtasks; track subtask.todo.id) {
             <li class="flex items-center">
