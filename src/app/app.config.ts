@@ -1,7 +1,4 @@
 import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
-import { provideRouter } from '@angular/router';
-
-import { routes } from './app.routes';
 import { initializeApp, provideFirebaseApp, getApp } from '@angular/fire/app';
 import {
   ReCaptchaEnterpriseProvider,
@@ -9,7 +6,7 @@ import {
   provideAppCheck,
 } from '@angular/fire/app-check';
 import { getAuth, provideAuth } from '@angular/fire/auth';
-import { getFirestore, provideFirestore } from '@angular/fire/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, provideFirestore } from '@angular/fire/firestore';
 import { environment } from '../environments/environments';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 
@@ -20,9 +17,8 @@ declare global {
 export const appConfig: ApplicationConfig = {
   providers: [
     provideZoneChangeDetection({ eventCoalescing: true }),
-    provideRouter(routes),
     provideFirebaseApp(() =>
-      initializeApp(environment.firebase)
+      initializeApp(environment.firebase), 
     ),
     // Turn on app check for Vertex AI in Firebase
     // provideAppCheck(() => {
@@ -36,6 +32,13 @@ export const appConfig: ApplicationConfig = {
       // return appCheck;
     // }),
     provideAuth(() => getAuth()),
-    provideFirestore(() => getFirestore()), provideAnimationsAsync(),
+    provideFirestore(() => 
+      initializeFirestore(getApp(), {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager(),
+        }),
+      })
+    ),
+    provideAnimationsAsync(), 
   ],
 };

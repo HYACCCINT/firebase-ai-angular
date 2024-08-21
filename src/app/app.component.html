@@ -1,5 +1,259 @@
 <div class="site-layout">
-  <div class="container">
-</div>
-  <router-outlet />
+  <div class="container"></div>
+  <div class="min-h-[100vh] h-full w-full py-10 flex bg-gray-50">
+    <div class="flex flex-col space-y-4 p-6 w-full">
+      <div class="flex justify-between items-center mb-4">
+        <span
+          class="text-3xl font-light mt-5 text-amber-500 font-pixel text-center"
+          >MAKE IT SO</span
+        >
+
+        <button mat-icon-button [matMenuTriggerFor]="settingsMenu">
+          <mat-icon class="text-gray-600 material-icons-outlined"
+            >settings</mat-icon
+          >
+        </button>
+        <mat-menu #settingsMenu="matMenu">
+          <button
+            mat-menu-item
+            class="text-gray-800 hover:bg-gray-100"
+            (click)="this.todoService.logout()"
+          >
+            Sign Out
+          </button>
+        </mat-menu>
+      </div>
+
+      <div>
+        <button
+          mat-raised-button
+          color="accent"
+          (click)="this.generateMainTask()"
+          label="from previous"
+        >
+          <mat-icon class="mr-2">add</mat-icon>
+        </button>
+        <button
+          mat-raised-button
+          color="accent"
+          (click)="fileInput.click()"
+          label="from image"
+        >
+          <mat-icon class="mr-2">add_a_photo</mat-icon>
+        </button>
+        <input
+          type="file"
+          accept="image/*"
+          (change)="generateMainWithSubTaskFromImage($event)"
+          hidden
+          #fileInput
+        />
+      </div>
+      <div class="container mx-auto p-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          @for (todo of this.todos; track todo.mainTask.id) {
+          <div class="bg-white p-6 rounded-lg shadow-lg relative">
+            <div class="flex justify-between items-center mb-4">
+              <div class="flex items-center">
+                <mat-checkbox
+                  (click)="updateComplete(todo.mainTask)"
+                  [checked]="todo.mainTask.completed"
+                  class="text-orange-500"
+                ></mat-checkbox>
+                <h3 class="ml-4 text-xl font-semibold">
+                  {{ todo.mainTask.title }}
+                </h3>
+              </div>
+              <mat-chip
+                class="px-3 py-1 text-white text-sm font-bold rounded-full"
+                [ngClass]="{
+                  'bg-red-200 text-red-800': todo.mainTask.priority === 'high',
+                  'bg-yellow-200 text-yellow-800':
+                    todo.mainTask.priority === 'medium',
+                  'bg-green-200 text-green-800':
+                    todo.mainTask.priority === 'low'
+                }"
+              >
+                {{ todo.mainTask.priority | titlecase }}
+              </mat-chip>
+            </div>
+
+            <!-- Subtasks as list items inside the main task card -->
+            <ul class="mt-4 space-y-2">
+              @for(subtask of todo.subtasks; track subtask.id) {
+              <li class="flex items-center">
+                <mat-checkbox
+                  (click)="updateComplete(subtask)"
+                  [checked]="subtask.completed"
+                  class="text-gray-500"
+                ></mat-checkbox>
+                <p
+                  class="ml-2 text-gray-600 {{
+                    subtask.completed ? 'line-through' : ''
+                  }}"
+                >
+                  {{ subtask.title }}
+                </p>
+              </li>
+              }
+            </ul>
+
+            <button
+              mat-icon-button
+              [matMenuTriggerFor]="taskMenu"
+              class="absolute top-2 right-2"
+            >
+              <mat-icon>more_vert</mat-icon>
+            </button>
+            <mat-menu #taskMenu="matMenu">
+              <button mat-menu-item (click)="openEditor(todo.mainTask)">
+                <mat-icon class="text-gray-600 material-icons-outlined"
+                  >edit</mat-icon
+                >
+                Edit
+              </button>
+              <button mat-menu-item (click)="deleteTask(todo.mainTask)">
+                <mat-icon class="text-gray-600 material-icons-outlined"
+                  >delete</mat-icon
+                >
+                Delete
+              </button>
+            </mat-menu>
+          </div>
+          }
+        </div>
+      </div>
+    </div>
+    @if (showEditor) {
+    <div
+      class="w-full md:w-1/2 p-6 bg-white transition-all duration-300 ease-in-out border border-gray-300 rounded-lg"
+    >
+      <button (click)="closeEditor()" class="absolute top-4 right-4">
+        <mat-icon>close</mat-icon>
+      </button>
+
+      <h2 class="text-xl font-bold mb-4">
+        {{ selectedTaskId ? "Edit Task" : "New Task" }}
+      </h2>
+
+      <form [formGroup]="taskForm" (ngSubmit)="submit()">
+        <div class="flex justify-end">
+          <button mat-raised-button color="primary" type="submit">Save</button>
+        </div>
+        <mat-form-field class="w-full mb-4">
+          <mat-label>Title</mat-label>
+          <input
+            matInput
+            formControlName="title"
+            placeholder="Develop the app"
+          />
+        </mat-form-field>
+
+        <div class="flex space-x-4 mb-4">
+          <mat-form-field>
+            <mat-label>Date</mat-label>
+            <input
+              matInput
+              [matDatepicker]="picker"
+              formControlName="dueDate"
+            />
+            <mat-datepicker-toggle
+              matSuffix
+              [for]="picker"
+            ></mat-datepicker-toggle>
+            <mat-datepicker #picker></mat-datepicker>
+          </mat-form-field>
+        </div>
+        <div class="flex items-center mb-4 justify-between">
+          <span>Priority</span>
+          <mat-button-toggle-group formControlName="priority" class="mb-4">
+            <mat-button-toggle value="high">High</mat-button-toggle>
+            <mat-button-toggle value="medium">Medium</mat-button-toggle>
+            <mat-button-toggle value="low">Low</mat-button-toggle>
+            <mat-button-toggle value="none">None</mat-button-toggle>
+          </mat-button-toggle-group>
+        </div>
+        <mat-slide-toggle formControlName="flagged">Flag</mat-slide-toggle>
+
+        <div class="mt-6">
+          <h3 class="text-lg font-medium">Subtasks</h3>
+          <div class="flex items-center space-x-2 mb-4">
+            <input
+              matInput
+              [(ngModel)]="newSubtaskTitle"
+              [ngModelOptions]="{ standalone: true }"
+              placeholder="New subtask title"
+              class="w-full p-2 border rounded"
+            />
+            <button mat-raised-button color="primary" (click)="addSubtask()">
+              +
+            </button>
+          </div>
+          <div class="flex items-center space-x-2 mb-4">
+            <button
+              mat-raised-button
+              color="accent"
+              (click)="imageInput.click()"
+            >
+              <mat-icon class="mr-2">add_a_photo</mat-icon>
+              Generate Subtasks from Image
+            </button>
+            <input
+              type="file"
+              accept="image/*"
+              (change)="generateMoreSubtasksFromImage($event)"
+              hidden
+              #imageInput
+            />
+          </div>
+          <ul class="mt-4 space-y-2">
+            @for (subtask of this.subtasks; track subtask.todo.id) {
+            <li class="flex items-center">
+              <mat-checkbox
+                (click)="updateComplete(subtask.todo)"
+                value="subtask.todo.completed"
+                class="text-orange-500"
+              ></mat-checkbox>
+              @if(subtask.editing) {
+              <input
+                [(ngModel)]="subtask.todo.title"
+                class="ml-2 w-full p-2 border rounded"
+              />
+              } @if(!subtask.editing) {
+              <p class="ml-2">{{ subtask.todo.title }}</p>
+              }
+              <button mat-icon-button [matMenuTriggerFor]="subtaskMenu">
+                <mat-icon>more_vert</mat-icon>
+              </button>
+              <mat-menu #subtaskMenu="matMenu">
+                <button mat-menu-item (click)="moveSubtaskUp(subtask)">
+                  <mat-icon class="text-gray-600 material-icons-outlined"
+                    >keyboard_arrow_up</mat-icon
+                  >
+                  Move order up
+                </button>
+                <button mat-menu-item (click)="moveSubtaskDown(subtask)">
+                  <mat-icon class="text-gray-600 material-icons-outlined"
+                    >keyboard_arrow_down</mat-icon
+                  >
+                  Move order down
+                </button>
+                <button
+                  mat-menu-item
+                  (click)="this.todoService.deleteSubtask(subtask.todo.id)"
+                >
+                  <mat-icon class="text-gray-600 material-icons-outlined"
+                    >delete</mat-icon
+                  >
+                  Delete
+                </button>
+              </mat-menu>
+            </li>
+            }
+          </ul>
+        </div>
+      </form>
+    </div>
+    }
+  </div>
 </div>
