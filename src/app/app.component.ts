@@ -1,11 +1,10 @@
 import {
   Component,
   ElementRef,
-  inject,
   signal,
   ViewChild,
 } from '@angular/core';
-import { Firestore, Timestamp } from '@angular/fire/firestore';
+import { Timestamp } from '@angular/fire/firestore';
 import { CommonModule, AsyncPipe } from '@angular/common';
 import {
   FormBuilder,
@@ -91,7 +90,7 @@ export class AppComponent {
     this.taskForm = this.fb.group({
       title: ['', Validators.required],
       dueDate: ['', Validators.required],
-      priority: ['none', Validators.required],
+      priority: ['None', Validators.required],
       completed: [false],
       flagged: [false],
     });
@@ -139,7 +138,6 @@ export class AppComponent {
   
       // Pass the main task title along with the image file
       const generatedSubtasks = await this.todoService.generateTodoFromImage(file, mainTaskTitle);
-  
       generatedSubtasks.subtasks.forEach((subtask: Todo) => {
         const newSubtask: Todo = {
           ...subtask,
@@ -182,30 +180,24 @@ export class AppComponent {
           if (!todo.parentId) {
             // It's a main task
             if (taskMap.has(todo.id)) {
-              // If there's already an entry (subtasks added before main task), update the main task
               taskMap.get(todo.id)!.mainTask = todo;
             } else {
-              // Otherwise, create a new entry for this main task
               taskMap.set(todo.id, { mainTask: todo, subtasks: [] });
             }
           } else {
             // It's a subtask
             if (taskMap.has(todo.parentId)) {
-              // If the main task already exists, add this subtask to it
               taskMap.get(todo.parentId)!.subtasks.push(todo);
             } else {
-              // If the main task doesn't exist yet, create a placeholder and add the subtask
               taskMap.set(todo.parentId, {
-                mainTask: {} as Todo, // Placeholder for the main task
+                mainTask: {} as Todo,
                 subtasks: [todo],
               });
             }
           }
         });
 
-        // Convert the map to an array for easier iteration in the template
         this.todos = Array.from(taskMap.values());
-        console.log('Tasks with subtasks: ', this.todos); // Log the categorized tasks
       },
       (error) => {
         console.error('Error loading todos:', error);
@@ -332,8 +324,8 @@ export class AppComponent {
 
   async onFileChange(event: any): Promise<void> {
     const file = event.target.files[0] as File | null;
-    const title = this.taskForm.get('title')?.value; // Get the current task title
-    await this.generateTaskFromImage(file, title); // Pass the title
+    const title = this.taskForm.get('title')?.value;
+    await this.generateTaskFromImage(file, title); 
   }
 
   async generateMainWithSubTaskFromImage(event: any): Promise<void> {
@@ -356,12 +348,12 @@ export class AppComponent {
       this.subtasks = generatedTodo.subtasks.map((subtask: Todo) => ({
         todo: {
           ...subtask,
-          parentId: '', // Placeholder, will be set upon submission
+          parentId: '', // Placeholder
         },
         editing: false,
       }));
       this.taskForm.patchValue(mainTask);
-      this.selectedTaskId = null; // No ID until submission
+      this.selectedTaskId = null;
       this.openEditor();
     } catch (error) {
       console.error('Failed to generate todo', error);
@@ -373,8 +365,8 @@ export class AppComponent {
   async onFileDrop(event: DragEvent): Promise<void> {
     event.preventDefault();
     const file = event.dataTransfer?.files[0] as File | null;
-    const title = this.taskForm.get('title')?.value; // Get the current task title
-    await this.generateTaskFromImage(file, title); // Pass the title
+    const title = this.taskForm.get('title')?.value;
+    await this.generateTaskFromImage(file, title);
   }
 
   onDragOver(event: DragEvent): void {
@@ -429,7 +421,7 @@ export class AppComponent {
           todo: {
             ...subtask,
             parentId: this.selectedTaskId!,
-            id: this.todoService.createTaskRef().id, // Use Firestore-generated ID
+            id: this.todoService.createTaskRef().id,
           },
           editing: false,
         }))
@@ -467,12 +459,10 @@ export class AppComponent {
   
     const mainTask: Todo = {
       ...this.taskForm.value,
-      id: this.selectedTaskId || newTaskRef.id, // Use generated ID if new
+      id: this.selectedTaskId || newTaskRef.id,
       owner: this.todoService.currentUser?.uid || this.todoService.localUid!,
       createdTime: Timestamp.fromDate(new Date()),
     };
-  
-    // Update the parentId for subtasks with the newly generated main task ID
     const subtaskTodos = this.subtasks.map((subtask, index) => ({
       ...subtask.todo,
       parentId: this.selectedTaskId || newTaskRef.id,
@@ -481,14 +471,10 @@ export class AppComponent {
   
     if (this.selectedTaskId) {
       // Update main task and subtasks in Firestore
-      this.todoService.updateTodoAndSubtasks(mainTask, subtaskTodos).then(() => {
-        console.log("Updated", mainTask, subtaskTodos);
-      });
+      this.todoService.updateTodoAndSubtasks(mainTask, subtaskTodos);
     } else {
       // Add new main task and subtasks to Firestore
-      this.todoService.addMainTaskWithSubtasks(mainTask, subtaskTodos).then(() => {
-        console.log("New", mainTask, subtaskTodos);
-      });
+      this.todoService.addMainTaskWithSubtasks(mainTask, subtaskTodos);
     }
   
     this.closeEditor();
