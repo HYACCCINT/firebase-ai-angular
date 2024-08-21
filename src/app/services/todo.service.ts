@@ -19,25 +19,26 @@ import {
   query,
   orderBy,
   Timestamp,
+  writeBatch,
+  where,
 } from '@angular/fire/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { environment } from '../../environments/environments';
 import { getVertexAI, getGenerativeModel } from 'firebase/vertexai-preview';
 
-type Priority = 'high' | 'medium' | 'low';
+type Priority = 'none' | 'low' | 'medium' | 'high';
 
 export type Todo = {
   id: string;
   title: string;
-  description: string | null;
   dueDate: Timestamp;
-  priority: 'none' | 'low' | 'medium' | 'high';
+  priority?: Priority; // Optional: only for main tasks
   completed: boolean;
   owner: string;
   createdTime: Timestamp;
   order?: number;
-  parentId?: string;
+  parentId?: string; // Required for subtasks
 };
 
 const MODEL_CONFIG = {
@@ -79,10 +80,10 @@ export class TodoService {
   private experimentModel = this.genAI.getGenerativeModel(MODEL_CONFIG);
 
   user$ = authState(this.auth);
-  private todosSubject = new BehaviorSubject<Todo[]>([]);
+  public todosSubject = new BehaviorSubject<Todo[]>([]);
   todos$ = this.todosSubject.asObservable(); // Observable for components to subscribe to
   currentUser: User | null = null;
-  private localUid: string | null = null;
+  public localUid: string | null = null;
 
   constructor() {
     this.user$.subscribe((user: User | null) => {
@@ -97,12 +98,38 @@ export class TodoService {
         }
       }
       this.loadTodos().subscribe((todos) => {
+        console.log("todos,", todos);
         this.todosSubject.next(todos);
       });
     });
 
     this.login();
   }
+
+  async generateMainTodo(): Promise<any> {
+    const activeTodos = this.todosSubject
+      .getValue()
+      .filter((todo) => !todo.completed);
+    const prompt = `provide a suggested todo that someone ${
+      activeTodos.length > 0
+        ? `should follow up after completing this todo ${JSON.stringify(
+            activeTodos[0].title
+          )}`
+        : `creating a todo list today might want to do in a friendly tone`
+    } using this JSON schema: { "type": "object", "properties": { "title": { "type": "string" }, "description": { "type": "string" }, "priority": { "type": "string" }, } }`;
+    try {
+      const result = await this.experimentModel.generateContent(prompt);
+      return JSON.parse(result.response.text());
+    } catch (error) {
+      console.error('Failed to generate todo', error);
+      throw error;
+    }
+  }
+
+  createTaskRef(id?: string) {
+    const taskCollection = collection(this.firestore, 'todos');
+    return id ? doc(taskCollection, id) : doc(taskCollection); // Firestore generates ID if not provided
+  }  
 
   async fileToGenerativePart(file: File) {
     const base64EncodedDataPromise = new Promise((resolve) => {
@@ -118,48 +145,30 @@ export class TodoService {
     } as any;
   }
 
-  async generateTodoBasedOnPrevious(): Promise<string> {
-    const activeTodos = this.todosSubject
-      .getValue()
-      .filter((todo) => !todo.completed);
-    const prompt = `provide a suggested todo that someone ${
-      activeTodos.length > 0
-        ? `should follow up after completing this todo ${JSON.stringify(
-            activeTodos[0]
-          )}`
-        : `creating a todo list today might want to do`
-    } using this JSON schema: { "type": "object", "properties": { "title": { "type": "string" }, "description": { "type": "string" }, "priority": { "type": "string" }, } }`;
-    try {
-      const result = await this.experimentModel.generateContent(prompt);
-      return result.response.text();
-    } catch (error) {
-      console.error('Failed to generate todo', error);
-      throw error;
-    }
-  }
-
   async generateTodoFromImage(
     file: File | null,
     title?: String
-  ): Promise<string> {
+  ): Promise<any> {
     if (!file) {
-      return '';
+      return {
+        mainTask: null,
+        subTasks: []
+      };
     }
     const imagePart = await this.fileToGenerativePart(file);
     const currentDate = new Date();
     const prompt = `Based on the ${
-      title ? `title "${title}" and ` : ''
-    }image in the input, generate a main task and multiple subtasks in an array that are required to complete this main task. The output should be in the format:
+      title ? `title "${title}" but more importantly in regards to the ` : ''
+    }image in the input, generate a main task and multiple subtasks in an array that are required to complete this main task, put emphasis on the image. The output should be in the format:
     {
       "mainTask": {
         "title": { "type": "string" },
         "dueDate": { "type": "timestamp" },
         "priority": { "type": "string" }
       },
-      "subtasks": [{
+      "subTasks": [{
         "title": { "type": "string" },
         "dueDate": { "type": "timestamp" },
-        "priority": { "type": "string" },
         "order": { "type": "int" }
       }]
     }. The due date should be a reasonable time in the future of ${currentDate}.`;
@@ -180,24 +189,26 @@ export class TodoService {
   async generateTodoFromDescription(
     description: String | null,
     title?: String
-  ): Promise<string> {
+  ): Promise<any> {
     if (!description) {
-      return '';
+      return {
+        mainTask: null,
+        subTasks: []
+      };
     }
     const currentDate = new Date();
     const prompt = `Based on the ${
       title ? `title "${title}" and ` : ''
-    }description ${description}, generate a main task and multiple subtasks in an array that are required to complete this main task. The output should be in the format:
+    }description ${description}, generate a main task and multiple subtasks in an array that are required to complete this main task, put emphasis on the description. The output should be in the format:
     {
       "mainTask": {
         "title": { "type": "string" },
         "dueDate": { "type": "timestamp" },
         "priority": { "type": "string" }
       },
-      "subtasks": [{
+      "subTasks": [{
         "title": { "type": "string" },
         "dueDate": { "type": "timestamp" },
-        "priority": { "type": "string" },
         "order": { "type": "int" }
       }]
     }. The due date should be a reasonable time in the future of ${currentDate}.`;
@@ -232,37 +243,108 @@ export class TodoService {
   loadTodos(): Observable<Todo[]> {
     const todoQuery = query(
       collection(this.firestore, 'todos'),
-      orderBy('timeCreated', 'desc')
+      orderBy('createdTime', 'desc')
     );
-
+  
+    console.log("Executing query...");
+  
     return collectionData(todoQuery, { idField: 'id' }) as Observable<Todo[]>;
   }
+  
 
-  // async addTodo(todoData: Todo): Promise<void> {
-  //   const userId =
-  //     this.currentUser?.uid || this.localUid || this.generateLocalUid();
+  async addMainTaskWithSubtasks(
+    mainTask: Omit<Todo, 'id'>,
+    subtasks: Omit<Todo, 'id'>[]
+  ): Promise<void> {
+    const userId = this.currentUser?.uid || this.localUid || this.generateLocalUid();
+  
+    try {
+      // Add the main task
+      const mainTaskRef = doc(collection(this.firestore, 'todos'));
+      const newMainTask: Todo = {
+        ...mainTask,
+        id: mainTaskRef.id,
+        owner: userId,
+        createdTime: Timestamp.fromDate(new Date()),
+      };
+      await setDoc(mainTaskRef, newMainTask);
+      // Add each subtask individually
+      for (const [index, subtask] of subtasks.entries()) {
+        const subtaskRef = doc(collection(this.firestore, 'todos'));
+        const newSubtask: Todo = {
+          ...subtask,
+          id: subtaskRef.id,
+          owner: userId,
+          createdTime: Timestamp.fromDate(new Date()),
+          parentId: mainTaskRef.id,
+          order: index,
+        };
+        await setDoc(subtaskRef, newSubtask);
+      }
+  
+      // Refresh todos after adding
+      this.refreshTodos();
+    } catch (error) {
+      console.error('Error adding main task and subtasks to Firestore', error);
+    }
+  }
+  
 
-  //   try {
-  //     const newTodoRef = doc(collection(this.firestore, 'todos'));
-  //     const todo = {
-  //       ...todoData,
-  //       date: todoData.date,
-  //       userId: userId,
-  //       timeCreated: Date.now(),
-  //       id: newTodoRef.id,
-  //     };
-  //     await setDoc(newTodoRef, todo);
-  //     this.refreshTodos();
-  //   } catch (error) {
-  //     console.error('Error writing new todo to Firestore', error);
-  //   }
-  // }
+  async updateTodoAndSubtasks(mainTask: Todo, subtasks: Todo[]): Promise<void> {
+    const batch = writeBatch(this.firestore);
+
+    try {
+      const mainTaskRef = doc(this.firestore, 'todos', mainTask.id);
+      batch.set(mainTaskRef, mainTask);
+
+      subtasks.forEach((subtask, index) => {
+        const subtaskRef = doc(this.firestore, 'todos', subtask.id);
+        const updatedSubtask = {
+          ...subtask,
+          order: index,
+        };
+        batch.set(subtaskRef, updatedSubtask);
+      });
+
+      await batch.commit();
+      this.refreshTodos();
+    } catch (error) {
+      console.error('Error updating main task and subtasks', error);
+    }
+  }
+
+  async deleteMainTaskAndSubtasks(mainTaskId: string): Promise<void> {
+    const batch = writeBatch(this.firestore);
+
+    try {
+      const subtasks = await this.loadSubtasks(mainTaskId);
+      subtasks.forEach((subtask) => {
+        const subtaskRef = doc(this.firestore, 'todos', subtask.id);
+        batch.delete(subtaskRef);
+      });
+
+      const mainTaskRef = doc(this.firestore, 'todos', mainTaskId);
+      batch.delete(mainTaskRef);
+
+      await batch.commit();
+      this.refreshTodos();
+    } catch (error) {
+      console.error('Error deleting main task and subtasks from Firestore', error);
+    }
+  }
+
+  async loadSubtasks(mainTaskId: string): Promise<Todo[]> {
+    const subtaskQuery = query(
+      collection(this.firestore, 'todos'),
+      where('parentId', '==', mainTaskId)
+    );
+    return (await collectionData(subtaskQuery, { idField: 'id' }).toPromise()) as Todo[];
+  }
 
   async addTodo(
     title: string,
-    description: string | null,
     dueDate: Timestamp,
-    priority: 'none' | 'low' | 'medium' | 'high',
+    completed: boolean,
     parentId?: string,
     order?: number
   ): Promise<void> {
@@ -273,10 +355,8 @@ export class TodoService {
       const todo: Todo = {
         id: newTodoRef.id,
         title: title,
-        description: description,
         dueDate: dueDate,
-        priority: priority,
-        completed: false,
+        completed: completed,
         owner: userId,
         createdTime: Timestamp.fromDate(new Date()),
         order: order || 0,
@@ -288,6 +368,7 @@ export class TodoService {
       console.error('Error writing new todo to Firestore', error);
     }
   }
+  
 
   async updateTodo(todoData: Todo, id: string): Promise<void> {
     const userId =
