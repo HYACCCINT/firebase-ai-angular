@@ -72,14 +72,50 @@
         </mat-menu>
       </div>
       }
-
       <button
-        class="bg-pink-500 hover:bg-pink-600 text-white font-bold py-2 px-4 rounded w-full flex items-center justify-center"
+        class="bg-gradient-to-r from-indigo-300 to-cyan-100 text-black font-extralight py-4 px-4 rounded-full w-full flex items-center justify-center font-pixel text-xl"
         (click)="generateTask()"
       >
-        <mat-icon class="mr-2 text-white">add</mat-icon>
+        <mat-icon class="mr-2 text-black">add</mat-icon>
         GENERATE TASK
       </button>
+
+      <div
+        class="file-upload-wrapper"
+        [class.success]="uploadSuccess"
+        [class.error]="uploadError"
+        (drop)="onFileDrop($event)"
+        (dragover)="onDragOver($event)"
+      >
+        <input
+          type="file"
+          accept="image/*"
+          (change)="onFileChange($event)"
+          hidden
+          #fileInput
+        />
+        <div class="file-dropper" (click)="fileInput.click()">
+          <mat-icon>upload</mat-icon>
+          <div *ngIf="imageName()">
+            <div *ngIf="selectedFile || imagePreview">
+              <img
+                [src]="imagePreview()"
+                alt="Image Preview"
+                class="image-preview"
+              />
+              <p>
+                <span class="image-name">{{ imageName() }}</span> ({{
+                  fileSize()
+                }}
+                KB)
+              </p>
+              <mat-icon class="delete-icon" (click)="removeImage()"
+                >delete</mat-icon
+              >
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     @if (showEditor) {

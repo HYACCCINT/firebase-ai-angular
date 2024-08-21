@@ -18,36 +18,49 @@ import {
   collectionData,
   query,
   orderBy,
+  Timestamp,
 } from '@angular/fire/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { environment } from '../../environments/environments';
-import { getVertexAI, getGenerativeModel } from "firebase/vertexai-preview";
+import { getVertexAI, getGenerativeModel } from 'firebase/vertexai-preview';
 
 type Priority = 'high' | 'medium' | 'low';
 
 export type Todo = {
   id: string;
   title: string;
-  description?: string | null;
-  date: Date;
-  time: string;
+  description: string | null;
+  dueDate: Timestamp;
+  priority: 'none' | 'low' | 'medium' | 'high';
   completed: boolean;
-  flagged: boolean;
-  priority: Priority;
+  owner: string;
+  createdTime: Timestamp;
+  order?: number;
+  parentId?: string;
 };
 
 const MODEL_CONFIG = {
   model: 'gemini-1.5-flash',
   generationConfig: { responseMimeType: 'application/json' },
   systemInstruction: `Use this JSON schema: ${JSON.stringify({
-    "type": "object",
-    "properties": {
-      "title": { "type": "string" },
-      "description": { "type": "string" },
-      "priority": { "type": "string" },
-    }
-  })}`
+    type: 'object',
+    properties: {
+      mainTask: {
+        title: { type: 'string' },
+        dueDate: { type: 'timestamp' },
+        priority: { type: 'string' },
+      },
+      subtasks: [
+        {
+          title: { type: 'string' },
+          dueDate: { type: 'timestamp' },
+          priority: { type: 'string' },
+          order: { type: 'int' },
+        },
+      ],
+    },
+  })}`,
 };
 
 @Injectable({
@@ -58,7 +71,7 @@ export class TodoService {
   private auth = inject(Auth);
 
   private vertexAI = getVertexAI(getApp());
-  // Caveat: the VertexAI model may take a while (~10s) to initialize after your 
+  // Caveat: the VertexAI model may take a while (~10s) to initialize after your
   // first call to GenerateContent(). You may see a PERMISSION_DENIED error before then.
   private prodModel = getGenerativeModel(this.vertexAI, MODEL_CONFIG);
 
@@ -91,11 +104,21 @@ export class TodoService {
     this.login();
   }
 
-  private generateLocalUid(): string {
-    return 'local-' + uuidv4();
+  async fileToGenerativePart(file: File) {
+    const base64EncodedDataPromise = new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () =>
+        resolve(JSON.stringify(reader?.result).split(',')[1]);
+      reader.readAsDataURL(file);
+    });
+    const result = await base64EncodedDataPromise;
+    const chew = JSON.stringify(result).slice(1, -3);
+    return {
+      inlineData: { data: chew, mimeType: file.type },
+    } as any;
   }
 
-  async generateTodo(): Promise<string> {
+  async generateTodoBasedOnPrevious(): Promise<string> {
     const activeTodos = this.todosSubject
       .getValue()
       .filter((todo) => !todo.completed);
@@ -113,6 +136,82 @@ export class TodoService {
       console.error('Failed to generate todo', error);
       throw error;
     }
+  }
+
+  async generateTodoFromImage(
+    file: File | null,
+    title?: String
+  ): Promise<string> {
+    if (!file) {
+      return '';
+    }
+    const imagePart = await this.fileToGenerativePart(file);
+    const currentDate = new Date();
+    const prompt = `Based on the ${
+      title ? `title "${title}" and ` : ''
+    }image in the input, generate a main task and multiple subtasks in an array that are required to complete this main task. The output should be in the format:
+    {
+      "mainTask": {
+        "title": { "type": "string" },
+        "dueDate": { "type": "timestamp" },
+        "priority": { "type": "string" }
+      },
+      "subtasks": [{
+        "title": { "type": "string" },
+        "dueDate": { "type": "timestamp" },
+        "priority": { "type": "string" },
+        "order": { "type": "int" }
+      }]
+    }. The due date should be a reasonable time in the future of ${currentDate}.`;
+    try {
+      const result = await this.experimentModel.generateContent([
+        prompt,
+        imagePart,
+      ]);
+
+      const response = result.response.text();
+      return JSON.parse(response);
+    } catch (error) {
+      console.error('Failed to generate todo', error);
+      throw error;
+    }
+  }
+
+  async generateTodoFromDescription(
+    description: String | null,
+    title?: String
+  ): Promise<string> {
+    if (!description) {
+      return '';
+    }
+    const currentDate = new Date();
+    const prompt = `Based on the ${
+      title ? `title "${title}" and ` : ''
+    }description ${description}, generate a main task and multiple subtasks in an array that are required to complete this main task. The output should be in the format:
+    {
+      "mainTask": {
+        "title": { "type": "string" },
+        "dueDate": { "type": "timestamp" },
+        "priority": { "type": "string" }
+      },
+      "subtasks": [{
+        "title": { "type": "string" },
+        "dueDate": { "type": "timestamp" },
+        "priority": { "type": "string" },
+        "order": { "type": "int" }
+      }]
+    }. The due date should be a reasonable time in the future of ${currentDate}.`;
+    try {
+      const result = await this.experimentModel.generateContent(prompt);
+      const response = result.response.text();
+      return JSON.parse(response);
+    } catch (error) {
+      console.error('Failed to generate todo', error);
+      throw error;
+    }
+  }
+  private generateLocalUid(): string {
+    return 'local-' + uuidv4();
   }
 
   login(): void {
@@ -139,17 +238,49 @@ export class TodoService {
     return collectionData(todoQuery, { idField: 'id' }) as Observable<Todo[]>;
   }
 
-  async addTodo(todoData: Todo): Promise<void> {
-    const userId = this.currentUser?.uid || this.localUid || this.generateLocalUid();
+  // async addTodo(todoData: Todo): Promise<void> {
+  //   const userId =
+  //     this.currentUser?.uid || this.localUid || this.generateLocalUid();
 
+  //   try {
+  //     const newTodoRef = doc(collection(this.firestore, 'todos'));
+  //     const todo = {
+  //       ...todoData,
+  //       date: todoData.date,
+  //       userId: userId,
+  //       timeCreated: Date.now(),
+  //       id: newTodoRef.id,
+  //     };
+  //     await setDoc(newTodoRef, todo);
+  //     this.refreshTodos();
+  //   } catch (error) {
+  //     console.error('Error writing new todo to Firestore', error);
+  //   }
+  // }
+
+  async addTodo(
+    title: string,
+    description: string | null,
+    dueDate: Timestamp,
+    priority: 'none' | 'low' | 'medium' | 'high',
+    parentId?: string,
+    order?: number
+  ): Promise<void> {
+    const userId =
+      this.currentUser?.uid || this.localUid || this.generateLocalUid();
     try {
       const newTodoRef = doc(collection(this.firestore, 'todos'));
-      const todo = {
-        ...todoData,
-        date: todoData.date,
-        userId: userId,
-        timeCreated: Date.now(),
+      const todo: Todo = {
         id: newTodoRef.id,
+        title: title,
+        description: description,
+        dueDate: dueDate,
+        priority: priority,
+        completed: false,
+        owner: userId,
+        createdTime: Timestamp.fromDate(new Date()),
+        order: order || 0,
+        parentId: parentId,
       };
       await setDoc(newTodoRef, todo);
       this.refreshTodos();
@@ -159,7 +290,8 @@ export class TodoService {
   }
 
   async updateTodo(todoData: Todo, id: string): Promise<void> {
-    const userId = this.currentUser?.uid || this.localUid || this.generateLocalUid();
+    const userId =
+      this.currentUser?.uid || this.localUid || this.generateLocalUid();
     if (!userId) {
       console.log('updateTodo requires a user ID');
       return;
@@ -175,7 +307,8 @@ export class TodoService {
   }
 
   async deleteTodo(id: string): Promise<void> {
-    const userId = this.currentUser?.uid || this.localUid || this.generateLocalUid();
+    const userId =
+      this.currentUser?.uid || this.localUid || this.generateLocalUid();
 
     try {
       await deleteDoc(doc(this.firestore, 'todos', id));
