@@ -78,6 +78,9 @@ export class AppComponent {
   ngOnInit(): void {
     this.initForm();
     this.loadTodos();
+    if (this.todos.length == 0) {
+      this.generateMainTask();
+    }
   }
 
   initForm(): void {
@@ -326,7 +329,7 @@ export class AppComponent {
         owner: this.todoService.currentUser?.uid || this.todoService.localUid!,
         createdTime: Timestamp.fromDate(new Date()),
         priority: generatedTodo.maintask.priority,
-      };
+      } as Todo;
 
       this.subtasks = generatedTodo.subtasks.map((subtask: Todo) => ({
         todo: {
@@ -335,9 +338,9 @@ export class AppComponent {
         },
         editing: false,
       }));
-      this.taskForm.patchValue(maintask);
+      // this.taskForm.patchValue(maintask);
       this.selectedTaskId = null;
-      this.openEditor();
+      this.openEditor(maintask);
     } catch (error) {
       console.error('Failed to generate todo', error);
       this.snackBar.open('Failed to generate todo', 'Close', {
