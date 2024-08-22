@@ -51,30 +51,30 @@
       </div>
       <div class="container mx-auto p-4">
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          @for (todo of this.todos; track todo.mainTask.id) {
+          @for (todo of this.todos; track todo.maintask.id) {
           <div class="bg-white p-6 rounded-lg shadow-lg relative">
             <div class="flex justify-between items-center mb-4">
               <div class="flex items-center">
                 <mat-checkbox
-                  (click)="updateComplete(todo.mainTask)"
-                  [checked]="todo.mainTask.completed"
+                  (click)="updateComplete(todo.maintask)"
+                  [checked]="todo.maintask.completed"
                   class="text-orange-500"
                 ></mat-checkbox>
                 <h3 class="ml-4 text-xl font-semibold">
-                  {{ todo.mainTask.title }}
+                  {{ todo.maintask.title }}
                 </h3>
               </div>
               <mat-chip
                 class="px-3 py-1 text-white text-sm font-bold rounded-full"
                 [ngClass]="{
-                  'bg-red-200 text-red-800': todo.mainTask.priority.toLowerCase() === 'high',
+                  'bg-red-200 text-red-800': todo.maintask.priority.toLowerCase() === 'high',
                   'bg-yellow-200 text-yellow-800':
-                    todo.mainTask.priority.toLowerCase() === 'medium',
+                    todo.maintask.priority.toLowerCase() === 'medium',
                   'bg-green-200 text-green-800':
-                    todo.mainTask.priority.toLowerCase() === 'low'
+                    todo.maintask.priority.toLowerCase() === 'low'
                 }"
               >
-                {{ todo.mainTask.priority | titlecase }}
+                {{ todo.maintask.priority | titlecase }}
               </mat-chip>
             </div>
 
@@ -106,13 +106,13 @@
               <mat-icon>more_vert</mat-icon>
             </button>
             <mat-menu #taskMenu="matMenu">
-              <button mat-menu-item (click)="openEditor(todo.mainTask)">
+              <button mat-menu-item (click)="openEditor(todo.maintask)">
                 <mat-icon class="text-gray-600 material-icons-outlined"
                   >edit</mat-icon
                 >
                 Edit
               </button>
-              <button mat-menu-item (click)="deleteTask(todo.mainTask)">
+              <button mat-menu-item (click)="deleteTask(todo.maintask)">
                 <mat-icon class="text-gray-600 material-icons-outlined"
                   >delete</mat-icon
                 >
@@ -201,10 +201,15 @@
             <input
               type="file"
               accept="image/*"
-              (change)="generateMoreSubtasksFromImage($event)"
+              (change)="generateSubtasksFromImage($event)"
               hidden
               #moreSubtaskInput
             />
+              <button mat-raised-button color="accent" (click)="generateSubtasksFromTitle(); $event.stopPropagation(); $event.preventDefault();">
+                <mat-icon class="mr-2">autorenew</mat-icon>
+                Generate Subtasks from Title
+              </button>
+            
           </div>
           
           <ul class="mt-4 space-y-2">
@@ -223,7 +228,7 @@
               } @if(!subtask.editing) {
               <p class="ml-2">{{ subtask.todo.title }}</p>
               }
-              <button mat-icon-button [matMenuTriggerFor]="subtaskMenu">
+              <button mat-icon-button [matMenuTriggerFor]="subtaskMenu" (click)="$event.stopPropagation(); $event.preventDefault();">
                 <mat-icon>more_vert</mat-icon>
               </button>
               <mat-menu #subtaskMenu="matMenu">
@@ -241,7 +246,7 @@
                 </button>
                 <button
                   mat-menu-item
-                  (click)="this.todoService.deleteSubtask(subtask.todo.id)"
+                  (click)="this.deleteSubtask(subtask)"
                 >
                   <mat-icon class="text-gray-600 material-icons-outlined"
                     >delete</mat-icon
