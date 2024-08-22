@@ -201,10 +201,15 @@
             <input
               type="file"
               accept="image/*"
-              (change)="generateMoreSubtasksFromImage($event)"
+              (change)="generateSubtasksFromImage($event)"
               hidden
               #moreSubtaskInput
             />
+              <button mat-raised-button color="accent" (click)="generateSubtasksFromTitle(); $event.stopPropagation(); $event.preventDefault();">
+                <mat-icon class="mr-2">autorenew</mat-icon>
+                Generate Subtasks from Title
+              </button>
+            
           </div>
           
           <ul class="mt-4 space-y-2">
@@ -223,7 +228,7 @@
               } @if(!subtask.editing) {
               <p class="ml-2">{{ subtask.todo.title }}</p>
               }
-              <button mat-icon-button [matMenuTriggerFor]="subtaskMenu">
+              <button mat-icon-button [matMenuTriggerFor]="subtaskMenu" (click)="$event.stopPropagation(); $event.preventDefault();">
                 <mat-icon>more_vert</mat-icon>
               </button>
               <mat-menu #subtaskMenu="matMenu">
@@ -241,7 +246,7 @@
                 </button>
                 <button
                   mat-menu-item
-                  (click)="this.todoService.deleteSubtask(subtask.todo.id)"
+                  (click)="this.deleteSubtask(subtask)"
                 >
                   <mat-icon class="text-gray-600 material-icons-outlined"
                     >delete</mat-icon

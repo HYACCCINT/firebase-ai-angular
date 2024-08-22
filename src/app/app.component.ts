@@ -1,9 +1,4 @@
-import {
-  Component,
-  ElementRef,
-  signal,
-  ViewChild,
-} from '@angular/core';
+import { Component, ElementRef, signal, ViewChild } from '@angular/core';
 import { Timestamp } from '@angular/fire/firestore';
 import { CommonModule, AsyncPipe } from '@angular/common';
 import {
@@ -56,7 +51,6 @@ import { TaskWithSubtasks, Todo, TodoService } from './services/todo.service';
   styleUrl: './app.component.scss',
 })
 export class AppComponent {
-  tasksWithSubtasks: any[] = []; // Main tasks with subtasks
   taskForm!: FormGroup;
   showEditor = false;
   selectedTaskId: string | null = null;
@@ -99,7 +93,7 @@ export class AppComponent {
     if (!this.newSubtaskTitle.trim()) return;
   
     const newSubtask: Todo = {
-      id: this.todoService.createTaskRef().id,
+      id: this.todoService.createTaskRef().id, // Generate a temporary ID for the subtask
       title: this.newSubtaskTitle.trim(),
       dueDate: Timestamp.fromDate(new Date()),
       completed: false,
@@ -109,53 +103,50 @@ export class AppComponent {
       createdTime: Timestamp.fromDate(new Date()),
     };
   
-    if (this.selectedTaskId) {
-      // If the main task has been saved (has an ID), save the subtask to Firestore
-      this.todoService.addSubtask(newSubtask).then(() => {
-        this.subtasks.push({ todo: newSubtask, editing: false });
-        this.newSubtaskTitle = ''; // Clear the input box
-      }).catch((error) => {
-        console.error('Failed to add subtask', error);
-        this.snackBar.open('Failed to add subtask', 'Close', {
-          duration: 3000,
-        });
-      });
-    } else {
-      // If the main task has not been saved, add the subtask to the local array only
-      this.subtasks.push({ todo: newSubtask, editing: false });
-      this.newSubtaskTitle = ''; // Clear the input box
-    }
+    // Add the subtask to the local array only, without saving to Firestore
+    this.subtasks.push({ todo: newSubtask, editing: false });
+    this.newSubtaskTitle = ''; // Clear the input box
   }
   
 
-  async generateMoreSubtasksFromImage(event: any): Promise<void> {
+  async generateSubtasksFromImage(event: any): Promise<void> {
     const file = event.target.files[0] as File | null;
     if (!file) return;
   
     try {
       // Get the title of the main task
       const mainTaskTitle = this.taskForm.get('title')?.value || '';
+      const owner = this.todoService.currentUser?.uid || this.todoService.localUid!;
+      const currentTime = Timestamp.fromDate(new Date());
   
       // Pass the main task title along with the image file
       const generatedSubtasks = await this.todoService.generateTodoFromImage(file, mainTaskTitle);
+  
       generatedSubtasks.subtasks.forEach((subtask: Todo) => {
         const newSubtask: Todo = {
           ...subtask,
           id: this.todoService.createTaskRef().id,
           parentId: this.selectedTaskId || '', // Placeholder until main task is saved
           order: this.subtasks.length, // Add to the end of the current subtasks
+          owner: owner, // Assign the owner
+          createdTime: currentTime, // Assign the created time
+          dueDate: subtask.dueDate || currentTime, // Ensure dueDate is set
+          completed: false,
         };
   
         if (this.selectedTaskId) {
           // Save to Firestore immediately if the main task has been saved
-          this.todoService.addSubtask(newSubtask).then(() => {
-            this.subtasks.push({ todo: newSubtask, editing: false });
-          }).catch((error) => {
-            console.error('Failed to add generated subtask', error);
-            this.snackBar.open('Failed to add generated subtask', 'Close', {
-              duration: 3000,
+          this.todoService
+            .addSubtask(newSubtask)
+            .then(() => {
+              this.subtasks.push({ todo: newSubtask, editing: false });
+            })
+            .catch((error) => {
+              console.error('Failed to add generated subtask', error);
+              this.snackBar.open('Failed to add generated subtask', 'Close', {
+                duration: 3000,
+              });
             });
-          });
         } else {
           // Otherwise, just add to the local array
           this.subtasks.push({ todo: newSubtask, editing: false });
@@ -170,12 +161,17 @@ export class AppComponent {
   }
   
 
+  deleteSubtask(subtask: { todo: Todo; editing: boolean }): void {
+    this.subtasks = this.subtasks.filter(st => st.todo.id !== subtask.todo.id);
+  }
+  
+
   loadTodos(): void {
-    this.todoService.loadTodos().subscribe(
-      (todos) => {
+    this.todoService.loadTodos().subscribe({
+      next: (todos) => {
         // Create a map to categorize main tasks and subtasks
         const taskMap = new Map<string, TaskWithSubtasks>();
-
+        console.log(todos, 'raw todos');
         todos.forEach((todo: Todo) => {
           if (!todo.parentId) {
             // It's a main task
@@ -196,37 +192,40 @@ export class AppComponent {
             }
           }
         });
-
+  
         this.todos = Array.from(taskMap.values());
+        console.log(this.todos, 'this.todos');
       },
-      (error) => {
+      error: (error) => {
         console.error('Error loading todos:', error);
         this.snackBar.open('Error loading data', 'Close', {
           duration: 3000,
         });
       }
-    );
+    });
   }
+  
 
   openEditor(task: Todo | null = null): void {
     this.showEditor = true;
     if (task) {
       this.selectedTaskId = task.id;
-  
+
       // Convert the dueDate Timestamp to a Date object before patching the form
-      const dueDate = task.dueDate ? this.parseFirestoreTimestamp(task.dueDate) : null;
-      
+      const dueDate = task.dueDate
+        ? this.parseFirestoreTimestamp(task.dueDate)
+        : null;
+
       this.taskForm.patchValue({
         ...task,
         dueDate: dueDate, // Assign the converted Date object
       });
-  
+
       this.loadSubtasks(task.id);
     } else {
       this.selectedTaskId = null;
     }
   }
-  
 
   closeEditor(): void {
     this.showEditor = false;
@@ -235,27 +234,28 @@ export class AppComponent {
 
   loadSubtasks(mainTaskId: string): void {
     this.todoService
-      .loadSubtasks(mainTaskId)
-      .then((subtasksObservable) => {
-        subtasksObservable.subscribe({
-          next: (subtasks) => {
-            this.subtasks = subtasks.map((todo) => ({ todo, editing: false }));
-          },
-          error: (error) => {
-            console.error('Error loading subtasks:', error);
-            this.snackBar.open('Error loading subtasks', 'Close', {
-              duration: 3000,
+        .loadSubtasks(mainTaskId)
+        .then((subtasksObservable) => {
+            subtasksObservable.subscribe({
+                next: (subtasks) => {
+                    this.subtasks = subtasks.map((todo) => ({ todo, editing: false }));
+                },
+                error: (error) => {
+                    console.error('Error loading subtasks:', error);
+                    this.snackBar.open('Error loading subtasks', 'Close', {
+                        duration: 3000,
+                    });
+                },
             });
-          },
+        })
+        .catch((error) => {
+            console.error('Error resolving subtasks observable:', error);
+            this.snackBar.open('Error resolving subtasks observable', 'Close', {
+                duration: 3000,
+            });
         });
-      })
-      .catch((error) => {
-        console.error('Error resolving subtasks observable:', error);
-        this.snackBar.open('Error resolving subtasks observable', 'Close', {
-          duration: 3000,
-        });
-      });
-  }
+}
+
 
   moveSubtaskUp(subtask: { todo: Todo; editing: boolean }): void {
     const index = this.subtasks.findIndex(
@@ -269,7 +269,7 @@ export class AppComponent {
       this.updateSubtaskOrder();
     }
   }
-
+  
   moveSubtaskDown(subtask: { todo: Todo; editing: boolean }): void {
     const index = this.subtasks.findIndex(
       (st) => st.todo.id === subtask.todo.id
@@ -325,7 +325,7 @@ export class AppComponent {
   async onFileChange(event: any): Promise<void> {
     const file = event.target.files[0] as File | null;
     const title = this.taskForm.get('title')?.value;
-    await this.generateTaskFromImage(file, title); 
+    await this.generateTaskFromImage(file, title);
   }
 
   async generateMainWithSubTaskFromImage(event: any): Promise<void> {
@@ -416,31 +416,64 @@ export class AppComponent {
         file,
         title
       );
-      this.subtasks = this.subtasks.concat(
-        generatedTodo.subtasks.map((subtask: Todo) => ({
-          todo: {
-            ...subtask,
-            parentId: this.selectedTaskId!,
-            id: this.todoService.createTaskRef().id,
-          },
-          editing: false,
-        }))
-      );
+      // Add the generated subtasks to the local state without saving to Firestore
+      const newSubtasks = generatedTodo.subtasks?.map((subtask: Todo) => ({
+        todo: {
+          ...subtask,
+          parentId: this.selectedTaskId || '', // Placeholder, to be set on save
+          id: this.todoService.createTaskRef().id,
+          order: this.subtasks.length, // Add to the end of the current subtasks
+          createdTime: Timestamp.fromDate(new Date()),
+          owner: this.todoService.currentUser?.uid || this.todoService.localUid!,
+          dueDate: subtask.dueDate ? subtask.dueDate : Timestamp.fromDate(new Date()),
+          completed: false,
+        },
+        editing: false,
+      }));
+  
+      // Concatenate the new subtasks with the existing ones
+      this.subtasks = this.subtasks.concat(newSubtasks);
     } catch (error) {
       console.error('Failed to generate todo', error);
       this.snackBar.open('Failed to generate todo', 'Close', {
         duration: 3000,
       });
     }
-  }
+  }  
 
   updateComplete(todo: Todo): void {
+    // Toggle the completed status
     const updated = { ...todo, completed: !todo.completed };
-    this.todoService.updateTodoAndSubtasks(
-      updated,
-      this.subtasks.map((st) => st.todo)
-    );
+  
+    // Update the local state immediately
+    if (!todo.parentId) {
+      // If it's a main task, update it in the local todos array
+      const mainTaskIndex = this.todos.findIndex(t => t.mainTask.id === todo.id);
+      if (mainTaskIndex !== -1) {
+        this.todos[mainTaskIndex].mainTask = updated;
+      }
+    } else {
+      // If it's a subtask, update it in the local subtasks array
+      const subtaskIndex = this.subtasks.findIndex(st => st.todo.id === todo.id);
+      if (subtaskIndex !== -1) {
+        this.subtasks[subtaskIndex].todo = updated;
+      }
+    }
+  
+    // Update the task in Firestore
+    this.todoService.updateTodo(updated, updated.id)
+      .then(() => {
+        console.log('Task completion status updated in Firestore');
+      })
+      .catch(error => {
+        console.error('Error updating task completion status in Firestore', error);
+        this.snackBar.open('Error updating task', 'Close', {
+          duration: 3000,
+        });
+      });
   }
+  
+  
 
   deleteTask(todo: Todo): void {
     if (todo.id) {
@@ -448,15 +481,53 @@ export class AppComponent {
     }
   }
 
+  async generateSubtasksFromTitle(): Promise<void> {
+    const mainTaskTitle = this.taskForm.get('title')?.value;
+  
+    if (!mainTaskTitle) {
+      this.snackBar.open('Please enter a title for the main task first.', 'Close', {
+        duration: 3000,
+      });
+      return;
+    }
+  
+    try {
+      // Call the service to generate subtasks based on the title
+      const generatedSubtasks = await this.todoService.generateSubtasksFromTitle(mainTaskTitle);
+      console.log(generatedSubtasks, "generatedSubtasks");
+      generatedSubtasks?.subtasks?.forEach((subtask: any, index: number) => {
+        const newSubtask: Todo = {
+          id: this.todoService.createTaskRef().id,
+          title: subtask.title,
+          dueDate: subtask.dueDate ? subtask.dueDate : Timestamp.fromDate(new Date()),
+          completed: false,
+          parentId: '', // Placeholder, will be set upon submission
+          order: this.subtasks.length + index, // Set the order as the next in the list
+          owner: this.todoService.currentUser?.uid || this.todoService.localUid!,
+          createdTime: Timestamp.fromDate(new Date()),
+        };
+  
+        // Add the generated subtask to the local array only
+        this.subtasks.push({ todo: newSubtask, editing: false });
+      });
+    } catch (error) {
+      console.error('Failed to generate subtasks from title', error);
+      this.snackBar.open('Failed to generate subtasks', 'Close', {
+        duration: 3000,
+      });
+    }
+  }
+  
+  
   submit(): void {
     if (this.taskForm.invalid) {
       return;
     }
-  
+
     const newTaskRef = this.selectedTaskId
       ? this.todoService.createTaskRef(this.selectedTaskId)
       : this.todoService.createTaskRef(); // Generate Firestore ID only if new
-  
+
     const mainTask: Todo = {
       ...this.taskForm.value,
       id: this.selectedTaskId || newTaskRef.id,
@@ -468,18 +539,19 @@ export class AppComponent {
       parentId: this.selectedTaskId || newTaskRef.id,
       order: index, // Ensure the order is updated based on the current index
     }));
-  
+    console.log(mainTask, subtaskTodos, 'subtaskTodos');
     if (this.selectedTaskId) {
       // Update main task and subtasks in Firestore
+      console.log(1);
       this.todoService.updateTodoAndSubtasks(mainTask, subtaskTodos);
     } else {
       // Add new main task and subtasks to Firestore
+      console.log(2);
       this.todoService.addMainTaskWithSubtasks(mainTask, subtaskTodos);
     }
-  
+
     this.closeEditor();
   }
-  
 
   private resetForm(): void {
     this.selectedTaskId = null;

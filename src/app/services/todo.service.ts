@@ -46,7 +46,6 @@ export type TaskWithSubtasks = {
   subtasks: Todo[];
 };
 
-
 const MODEL_CONFIG = {
   model: 'gemini-1.5-flash',
   generationConfig: { responseMimeType: 'application/json' },
@@ -134,7 +133,7 @@ export class TodoService {
   createTaskRef(id?: string) {
     const taskCollection = collection(this.firestore, 'todos');
     return id ? doc(taskCollection, id) : doc(taskCollection); // Firestore generates ID if not provided
-  }  
+  }
 
   async fileToGenerativePart(file: File) {
     const base64EncodedDataPromise = new Promise((resolve) => {
@@ -150,14 +149,11 @@ export class TodoService {
     } as any;
   }
 
-  async generateTodoFromImage(
-    file: File | null,
-    title?: String
-  ): Promise<any> {
+  async generateTodoFromImage(file: File | null, title?: String): Promise<any> {
     if (!file) {
       return {
         mainTask: null,
-        subTasks: []
+        subTasks: [],
       };
     }
     const imagePart = await this.fileToGenerativePart(file);
@@ -166,12 +162,12 @@ export class TodoService {
       title ? `title "${title}" but more importantly in regards to the ` : ''
     }image in the input, generate a main task and multiple subtasks in an array that are required to complete this main task, put emphasis on the image. The output should be in the format:
     {
-      "mainTask": {
+      "maintask": {
         "title": { "type": "string" },
         "dueDate": { "type": "timestamp" },
         "priority": { "type": "string" }
       },
-      "subTasks": [{
+      "subtasks": [{
         "title": { "type": "string" },
         "dueDate": { "type": "timestamp" },
         "order": { "type": "int" }
@@ -191,6 +187,32 @@ export class TodoService {
     }
   }
 
+  async generateSubtasksFromTitle(title: string): Promise<any> {
+    if (!title) {
+      return {
+        subtasks: [],
+      };
+    }
+
+    const currentDate = new Date();
+    const prompt = `Generate multiple subtasks that are required to complete the main task titled "${title}". The output should be in the format:
+    {"subtasks": [{
+        "title": { "type": "string" },
+        "dueDate": { "type": "timestamp" },
+        "order": { "type": "int" }
+  }]}
+    . The due date should be a reasonable time in the future of ${currentDate}.`;
+
+    try {
+      const result = await this.experimentModel.generateContent([prompt]);
+      const response = await result.response.text();
+      return JSON.parse(response);
+    } catch (error) {
+      console.error('Failed to generate subtasks from title', error);
+      throw error;
+    }
+  }
+
   async generateTodoFromDescription(
     description: String | null,
     title?: String
@@ -198,7 +220,7 @@ export class TodoService {
     if (!description) {
       return {
         mainTask: null,
-        subTasks: []
+        subTasks: [],
       };
     }
     const currentDate = new Date();
@@ -250,19 +272,17 @@ export class TodoService {
       collection(this.firestore, 'todos'),
       orderBy('createdTime', 'desc')
     );
-  
-    console.log("Executing query...");
-  
+
     return collectionData(todoQuery, { idField: 'id' }) as Observable<Todo[]>;
   }
-  
 
   async addMainTaskWithSubtasks(
     mainTask: Omit<Todo, 'id'>,
     subtasks: Omit<Todo, 'id'>[]
   ): Promise<void> {
-    const userId = this.currentUser?.uid || this.localUid || this.generateLocalUid();
-  
+    const userId =
+      this.currentUser?.uid || this.localUid || this.generateLocalUid();
+
     try {
       // Add the main task
       const mainTaskRef = doc(collection(this.firestore, 'todos'));
@@ -274,7 +294,7 @@ export class TodoService {
       };
       await setDoc(mainTaskRef, newMainTask);
       // Add each subtask individually
-      for (const [index, subtask] of subtasks.entries()) {
+      for (let [index, subtask] of subtasks.entries()) {
         const subtaskRef = doc(collection(this.firestore, 'todos'));
         const newSubtask: Todo = {
           ...subtask,
@@ -286,75 +306,78 @@ export class TodoService {
         };
         await setDoc(subtaskRef, newSubtask);
       }
-  
+
       // Refresh todos after adding
       this.refreshTodos();
     } catch (error) {
       console.error('Error adding main task and subtasks to Firestore', error);
     }
   }
-  
+
   async deleteMainTaskAndSubtasks(mainTaskId: string): Promise<void> {
     try {
       // First, load the subtasks for the main task
       const subtasksObservable = await this.loadSubtasks(mainTaskId);
-  
+
       subtasksObservable.subscribe(async (subtasks) => {
         // Delete each subtask individually
         for (const subtask of subtasks) {
           const subtaskRef = doc(this.firestore, 'todos', subtask.id);
           await deleteDoc(subtaskRef);
         }
-  
+
         // Delete the main task after deleting its subtasks
         const mainTaskRef = doc(this.firestore, 'todos', mainTaskId);
         await deleteDoc(mainTaskRef);
-  
+
         // Refresh the task list after deletion
         this.refreshTodos();
       });
     } catch (error) {
-      console.error('Error deleting main task and subtasks from Firestore', error);
-    }
-  }
-  
-  
-async updateTodoAndSubtasks(mainTask: Todo, subtasks: Todo[]): Promise<void> {
-  try {
-    // Update the main task
-    const mainTaskRef = doc(this.firestore, 'todos', mainTask.id);
-    await setDoc(mainTaskRef, mainTask, { merge: true });
-
-    // Update each subtask individually
-    for (const subtask of subtasks) {
-      const subtaskRef = doc(this.firestore, 'todos', subtask.id);
-      await setDoc(subtaskRef, subtask, { merge: true });
-    }
-  } catch (error) {
-    console.error('Error updating/deleting tasks and subtasks', error);
-    throw error;
-  }
-}
-  // Update subtask title
-  async updateSubtaskTitle(subtask: Todo): Promise<void> {
-    const subtaskRef = doc(this.firestore, 'todos', subtask.id);
-    await updateDoc(subtaskRef, { title: subtask.title });
-  }
-
-  // Delete a subtask
-  async deleteSubtask(subtaskId: string): Promise<void> {
-    const subtaskRef = doc(this.firestore, 'todos', subtaskId);
-    await deleteDoc(subtaskRef);
-  }
-
-  // Update subtask order
-  async updateSubtaskOrder(subtasks: Todo[]): Promise<void> {
-    for (const subtask of subtasks) {
-      const subtaskRef = doc(this.firestore, 'todos', subtask.id);
-      await updateDoc(subtaskRef, { order: subtask.order });
+      console.error(
+        'Error deleting main task and subtasks from Firestore',
+        error
+      );
     }
   }
 
+  async updateTodoAndSubtasks(mainTask: Todo, subtasks: Todo[]): Promise<void> {
+    try {
+      // Update the main task
+      const mainTaskRef = doc(this.firestore, 'todos', mainTask.id);
+      await setDoc(mainTaskRef, mainTask, { merge: true });
+
+      // Resolve the promise to get the observable
+      const subtasksObservable = await this.loadSubtasks(mainTask.id);
+
+      // Subscribe to the observable to get the actual data
+      subtasksObservable.subscribe(async (existingSubtasks) => {
+        // Create a set of the current subtask IDs
+        const currentSubtaskIds = new Set(
+          subtasks.map((subtask) => subtask.id)
+        );
+
+        // Delete subtasks that are no longer present in the updated list
+        for (let existingSubtask of existingSubtasks) {
+          if (!currentSubtaskIds.has(existingSubtask.id)) {
+            const subtaskRef = doc(this.firestore, 'todos', existingSubtask.id);
+            await deleteDoc(subtaskRef);
+          }
+        }
+
+        // Update or add each subtask individually
+        for (let subtask of subtasks) {
+          console.log("adding", subtask);
+          const subtaskRef = doc(this.firestore, 'todos', subtask.id);
+          await setDoc(subtaskRef, subtask, { merge: true });
+        }
+      });
+      this.refreshTodos();
+    } catch (error) {
+      console.error('Error updating/deleting tasks and subtasks', error);
+      throw error;
+    }
+  }
 
   async loadSubtasks(mainTaskId: string): Promise<Observable<Todo[]>> {
     const subtaskQuery = query(
@@ -373,7 +396,7 @@ async updateTodoAndSubtasks(mainTask: Todo, subtasks: Todo[]): Promise<void> {
       throw error;
     }
   }
-  
+
   async addTodo(
     title: string,
     dueDate: Timestamp,
@@ -401,7 +424,6 @@ async updateTodoAndSubtasks(mainTask: Todo, subtasks: Todo[]): Promise<void> {
       console.error('Error writing new todo to Firestore', error);
     }
   }
-  
 
   async updateTodo(todoData: Todo, id: string): Promise<void> {
     const userId =
@@ -433,8 +455,14 @@ async updateTodoAndSubtasks(mainTask: Todo, subtasks: Todo[]): Promise<void> {
   }
 
   private refreshTodos(): void {
-    this.loadTodos().subscribe((todos) => {
-      this.todosSubject.next(todos);
-    });
+    this.loadTodos().subscribe(
+      (todos) => {
+        console.log('Fetched todos:', todos); // Log the fetched todos
+        this.todosSubject.next(todos);
+      },
+      (error) => {
+        console.error('Error fetching todos:', error);
+      }
+    );
   }
 }
