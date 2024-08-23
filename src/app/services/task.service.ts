@@ -175,14 +175,13 @@ export class TaskService {
   async generateMaintask(): Promise<any> {
     const activeTasks = this.tasksSubject
       .getValue()
-      .filter((task) => !task.completed);
-    console.log(activeTasks);
+      .filter((task) => !task.completed && !task.parentId);
     const prompt = `provide a major task that someone ${
       activeTasks.length > 0
         ? `might do the day after relating to this task ${JSON.stringify(
             activeTasks[0].title
           )}`
-        : `creating a task list today might want to do in a friendly tone`
+        : `might want to do or play in a day to day or seasonal basis`
     } using this JSON schema: { "type": "object", "properties": { "title": { "type": "string" }, "description": { "type": "string" }, "priority": { "type": "string" }, } }`;
     try {
       const result = await this.experimentModel.generateContent(prompt);
