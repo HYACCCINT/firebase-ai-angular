@@ -18,9 +18,9 @@ Setup and deploy locally
 
 ### Prerequisites
 
-- Node.js version 20+ .
-- npm version 10+ .
-- Angular CLI 18+ .
+- Node.js version 20+
+- npm version 10+
+- Angular CLI 18+
 
 ### Setup Instructions
 
