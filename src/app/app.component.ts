@@ -51,11 +51,10 @@ export class AppComponent {
   showEditor = false;
   selectedTaskId: string | null = null;
   tasks: any[] = [];
-  subtasks: { task: Task; editing: boolean }[] = []; // List of subtasks with editing state
+  subtasks: { task: Task; editing: boolean }[] = [];
   newSubtaskTitle = '';
-
-
   imagePreview = signal('');
+  isLoading = signal(false);
   @ViewChild('fileInput') fileInput: ElementRef | undefined;
 
   constructor(
@@ -154,6 +153,7 @@ export class AppComponent {
       completed: false,
     });
     this.imagePreview.set('');
+    this.isLoading.set(false);
   }
 
   handleError(error: any, userMessage: string): void {
@@ -232,7 +232,7 @@ export class AppComponent {
       this.handleError(null, 'File not found');
       return;
     }
-  
+
     const fileSizeMB = file.size / (1024 * 1024); // Convert bytes to MB
     if (fileSizeMB > 20) {
       this.handleError(
@@ -241,20 +241,25 @@ export class AppComponent {
       );
       return;
     }
-  
+    this.isLoading.set(true);
     try {
       await this.displayImagePreview(file);
       const title = this.taskForm.get('title')?.value || '';
-      const generatedSubtasks = await this.taskService.generateSubtasks({ file, title });
+      const generatedSubtasks = await this.taskService.generateSubtasks({
+        file,
+        title,
+      });
       this.addSubtasksToList(generatedSubtasks.subtasks);
     } catch (error) {
       this.handleError(error, 'Failed to generate subtasks from image.');
+    } finally {
+      this.isLoading.set(false);
     }
   }
 
   async handleTitleInput(): Promise<void> {
     const title = this.taskForm.get('title')?.value;
-  
+
     if (!title) {
       this.handleError(
         'Empty title',
@@ -262,19 +267,24 @@ export class AppComponent {
       );
       return;
     }
-  
+    this.isLoading.set(true);
     try {
-      const generatedSubtasks = await this.taskService.generateSubtasks({ title });
+      const generatedSubtasks = await this.taskService.generateSubtasks({
+        title,
+      });
       this.addSubtasksToList(generatedSubtasks.subtasks);
     } catch (error) {
       this.handleError(error, 'Failed to generate subtasks from title.');
+    } finally {
+      this.isLoading.set(false);
     }
   }
 
   private addSubtasksToList(subtasks: any[]): void {
-    const owner = this.taskService.currentUser?.uid || this.taskService.localUid!;
+    const owner =
+      this.taskService.currentUser?.uid || this.taskService.localUid!;
     const currentTime = Timestamp.fromDate(new Date());
-  
+
     const newSubtasks = subtasks.map((subtask: any, index: number) => ({
       task: {
         id: this.taskService.createTaskRef().id,
@@ -287,33 +297,33 @@ export class AppComponent {
       },
       editing: false,
     }));
-  
+
     this.subtasks = this.subtasks.concat(newSubtasks);
   }
 
-  generateMaintask(): void {
-    this.taskService
-      .generateMaintask()
-      .then((generatedTask: any) => {
-        const newTaskRef = this.taskService.createTaskRef();
-        const newTask: Task = {
-          id: newTaskRef.id,
-          title: generatedTask.title,
-          completed: false,
-          owner:
-            this.taskService.currentUser?.uid || this.taskService.localUid!,
-          createdTime: Timestamp.fromDate(new Date()),
-          priority: generatedTask.priority
-            ? generatedTask.priority.toLowerCase()
-            : 'none',
-        };
+  async generateMaintask(): Promise<void> {
+    this.isLoading.set(true);
+    try {
+      const generatedTask = await this.taskService.generateMaintask();
+      const newTaskRef = this.taskService.createTaskRef();
+      const newTask: Task = {
+        id: newTaskRef.id,
+        title: generatedTask.title,
+        completed: false,
+        owner: this.taskService.currentUser?.uid || this.taskService.localUid!,
+        createdTime: Timestamp.fromDate(new Date()),
+        priority: generatedTask.priority
+          ? generatedTask.priority.toLowerCase()
+          : 'none',
+      };
 
-        this.tasks.push({ maintask: newTask, subtasks: [] });
-        this.openEditor(newTask);
-      })
-      .catch((error: any) => {
-        this.handleError(error, 'Failed to generate main task');
-      });
+      this.tasks.push({ maintask: newTask, subtasks: [] });
+      this.openEditor(newTask);
+    } catch (error) {
+      this.handleError(error, 'Failed to generate main task');
+    } finally {
+      this.isLoading.set(false);
+    }
   }
 
   completeTask(task: Task): void {
@@ -371,9 +381,14 @@ export class AppComponent {
     this.newSubtaskTitle = '';
   }
 
-  moveSubtaskOrder(subtask: { task: Task; editing: boolean }, direction: 'up' | 'down'): void {
-    const index = this.subtasks.findIndex((st) => st.task.id === subtask.task.id);
-  
+  moveSubtaskOrder(
+    subtask: { task: Task; editing: boolean },
+    direction: 'up' | 'down'
+  ): void {
+    const index = this.subtasks.findIndex(
+      (st) => st.task.id === subtask.task.id
+    );
+
     if (direction === 'up' && index > 0) {
       [this.subtasks[index], this.subtasks[index - 1]] = [
         this.subtasks[index - 1],
@@ -406,7 +421,7 @@ export class AppComponent {
   async onFileDrop(event: DragEvent): Promise<void> {
     event.preventDefault();
     const file = event.dataTransfer?.files[0] as File | null;
-  
+
     if (file) {
       const inputEvent = { target: { files: [file] } } as any;
       await this.handleFileInput(inputEvent);
@@ -426,5 +441,4 @@ export class AppComponent {
     };
     reader.readAsDataURL(file);
   }
-
 }

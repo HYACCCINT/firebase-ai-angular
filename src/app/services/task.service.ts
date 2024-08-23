@@ -193,26 +193,33 @@ export class TaskService {
     }
   }
 
-  async generateSubtasks(input: { file?: File | null; title?: string }): Promise<any> {
+  async generateSubtasks(input: {
+    file?: File | null;
+    title?: string;
+  }): Promise<any> {
     const { file, title } = input;
-  
+
     if (!file && !title) {
       return {
         subtasks: [],
       };
     }
-  
+
     const imagePart = file ? await this.fileToGenerativePart(file) : '';
-    const prompt =  `Based on the ${title ? `title "${title}" ` : ''} ${file ? "but more importantly in regards to the image in the input," : ''}  generate multiple subtasks in an array that are required to complete the main task in the title. The output should be in the format:
+    const prompt = `Based on the ${title ? `title "${title}" ` : ''} ${
+      file ? 'but more importantly in regards to the image in the input,' : ''
+    }  generate multiple subtasks in an array that are required to complete the main task in the title. The output should be in the format:
       {
         "subtasks": [{
           "title": { "type": "string" },
           "order": { "type": "int" }
         }]
       }.`;
-  
+
     try {
-      const result = await this.experimentModel.generateContent([prompt, imagePart].filter(Boolean));
+      const result = await this.experimentModel.generateContent(
+        [prompt, imagePart].filter(Boolean)
+      );
       const response = await result.response.text();
       return JSON.parse(response);
     } catch (error) {
@@ -257,7 +264,10 @@ export class TaskService {
     }
   }
 
-  async updateMaintaskAndSubtasks(maintask: Task, subtasks: Task[]): Promise<void> {
+  async updateMaintaskAndSubtasks(
+    maintask: Task,
+    subtasks: Task[]
+  ): Promise<void> {
     try {
       const maintaskRef = doc(this.firestore, 'todos', maintask.id);
       await setDoc(maintaskRef, maintask, { merge: true });

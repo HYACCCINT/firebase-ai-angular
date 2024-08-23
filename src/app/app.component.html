@@ -4,11 +4,11 @@
     <div
       class="w-16 h-full flex flex-col items-center justify-between py-4 rounded-lg mr-4"
     >
-    <div
-    class="rounded-full w-12 h-12 bg-gradient-to-tl to-[#ffc403] from-[#e03700] flex items-center justify-center m-4 shadow-md shadow-[#ffd358]"
-  >
-    <mat-icon class="text-white font-extrabold">check</mat-icon>
-  </div>
+      <div
+        class="rounded-full w-12 h-12 bg-gradient-to-tl to-[#ffc403] from-[#e03700] flex items-center justify-center m-4 shadow-md shadow-[#ffd358]"
+      >
+        <mat-icon class="text-white font-extrabold">check</mat-icon>
+      </div>
       <button
         class="rounded-xl w-12 h-12 bg-gradient-to-tl to-[#1c7eff] from-[#90dbff] flex items-center justify-center m-4 shadow-md shadow-[#ffd358]"
         title="New task"
@@ -69,7 +69,10 @@
                   >
                   Edit
                 </button>
-                <button mat-menu-item (click)="deleteMaintaskAndSubtasks(task.maintask)">
+                <button
+                  mat-menu-item
+                  (click)="deleteMaintaskAndSubtasks(task.maintask)"
+                >
                   <mat-icon class="text-gray-600 material-icons-outlined"
                     >delete</mat-icon
                   >
@@ -118,6 +121,22 @@
       >
         Save
       </button>
+
+      @if (isLoading()) {
+      <div
+        class="absolute inset-0 flex flex-col items-center justify-center bg-[#f7f8fa] z-50 rounded-3xl shadow-xl shadow-[#ffd358] p-10"
+      >
+        <div class="flex flex-col items-center justify-center">
+          <mat-icon
+            class="text-[#1c7eff] font-extrabold text-[50px] min-w-[100px] min-h-[100px]"
+            >add_task</mat-icon
+          >
+          <p class="text-gray-500 text-lg font-medium mt-4">
+            Generating suggested task...
+          </p>
+        </div>
+      </div>
+      }
 
       <form [formGroup]="taskForm" (ngSubmit)="submit()">
         <mat-form-field class="w-full mb-4 mt-16">
@@ -231,7 +250,10 @@
                   >
                   Move order up
                 </button>
-                <button mat-menu-item (click)="moveSubtaskOrder(subtask, 'down')">
+                <button
+                  mat-menu-item
+                  (click)="moveSubtaskOrder(subtask, 'down')"
+                >
                   <mat-icon class="text-gray-600 material-icons-outlined"
                     >keyboard_arrow_down</mat-icon
                   >
