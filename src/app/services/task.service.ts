@@ -110,7 +110,7 @@ export class TaskService {
     const activeTasks = this.tasksSubject
       .getValue()
       .filter((task) => !task.completed);
-      console.log(activeTasks);
+    console.log(activeTasks);
     const prompt = `provide a major task that someone ${
       activeTasks.length > 0
         ? `might do the day after relating to this task ${JSON.stringify(
@@ -156,12 +156,8 @@ export class TaskService {
     const imagePart = await this.fileToGenerativePart(file);
     const prompt = `Based on the ${
       title ? `title "${title}" but more importantly in regards to the ` : ''
-    }image in the input, generate a main task and multiple subtasks in an array that are required to complete this main task, put emphasis on the image. The output should be in the format:
+    }image in the input, generate multiple subtasks in an array that are required to complete the main task in the title, put emphasis on the image. The output should be in the format:
     {
-      "maintask": {
-        "title": { "type": "string" },
-        "priority": { "type": "string" }
-      },
       "subtasks": [{
         "title": { "type": "string" },
         "order": { "type": "int" }
@@ -205,39 +201,6 @@ export class TaskService {
     }
   }
 
-  async generateTaskFromDescription(
-    description: String | null,
-    title?: String
-  ): Promise<any> {
-    if (!description) {
-      return {
-        maintask: null,
-        subTasks: [],
-      };
-    }
-    const currentDate = new Date();
-    const prompt = `Based on the ${
-      title ? `title "${title}" and ` : ''
-    }description ${description}, generate a main task and multiple subtasks in an array that are required to complete this main task, put emphasis on the description. The output should be in the format:
-    {
-      "maintask": {
-        "title": { "type": "string" },
-        "priority": { "type": "string" }
-      },
-      "subTasks": [{
-        "title": { "type": "string" },
-        "order": { "type": "int" }
-      }]
-    }.`;
-    try {
-      const result = await this.experimentModel.generateContent(prompt);
-      const response = result.response.text();
-      return JSON.parse(response);
-    } catch (error) {
-      console.error('Failed to generate task', error);
-      throw error;
-    }
-  }
   private generateLocalUid(): string {
     return 'local-' + uuidv4();
   }
@@ -266,6 +229,23 @@ export class TaskService {
     return collectionData(taskQuery, { idField: 'id' }) as Observable<Task[]>;
   }
 
+  async loadSubtasks(maintaskId: string): Promise<Observable<Task[]>> {
+    const subtaskQuery = query(
+      collection(this.firestore, 'todos'),
+      where('parentId', '==', maintaskId)
+    );
+    return await collectionData(subtaskQuery, { idField: 'id' });
+  }
+  private refreshTasks(): void {
+    this.loadTasks().subscribe({
+      next: (tasks) => {
+        this.tasksSubject.next(tasks);
+      },
+      error: (error) => {
+        console.error('Error fetching tasks:', error);
+      },
+    });
+  }
   async addMainTaskWithSubtasks(
     maintask: Omit<Task, 'id'>,
     subtasks: Omit<Task, 'id'>[]
@@ -274,7 +254,6 @@ export class TaskService {
       this.currentUser?.uid || this.localUid || this.generateLocalUid();
 
     try {
-
       const maintaskRef = doc(collection(this.firestore, 'todos'));
       const newMainTask: Task = {
         ...maintask,
@@ -302,7 +281,55 @@ export class TaskService {
       console.error('Error adding main task and subtasks to Firestore', error);
     }
   }
+  async updateTaskAndSubtasks(maintask: Task, subtasks: Task[]): Promise<void> {
+    try {
+      const maintaskRef = doc(this.firestore, 'todos', maintask.id);
+      await setDoc(maintaskRef, maintask, { merge: true });
 
+      const subtasksObservable = await this.loadSubtasks(maintask.id);
+      const existingSubtasks = await firstValueFrom(subtasksObservable);
+
+      const currentSubtaskIds = new Set(subtasks.map((subtask) => subtask.id));
+
+      await Promise.all(
+        existingSubtasks.map(async (existingSubtask) => {
+          if (!currentSubtaskIds.has(existingSubtask.id)) {
+            const subtaskRef = doc(this.firestore, 'todos', existingSubtask.id);
+            await deleteDoc(subtaskRef);
+          }
+        })
+      );
+
+      await Promise.all(
+        subtasks.map(async (subtask) => {
+          const subtaskRef = doc(this.firestore, 'todos', subtask.id);
+          await setDoc(subtaskRef, subtask, { merge: true });
+        })
+      );
+
+      this.refreshTasks();
+    } catch (error) {
+      console.error('Error updating/deleting tasks and subtasks', error);
+      throw error;
+    }
+  }
+
+  async updateTask(taskData: Task, id: string): Promise<void> {
+    const userId =
+      this.currentUser?.uid || this.localUid || this.generateLocalUid();
+    if (!userId) {
+      console.log('updateTask requires a user ID');
+      return;
+    }
+
+    try {
+      const task = { ...taskData, userId: userId };
+      await setDoc(doc(this.firestore, 'todos', id), task);
+      this.refreshTasks();
+    } catch (error) {
+      console.error('Error updating task in Firestore', error);
+    }
+  }
   async deleteMainTaskAndSubtasks(maintaskId: string): Promise<void> {
     try {
       const subtasksObservable = await this.loadSubtasks(maintaskId);
@@ -326,62 +353,6 @@ export class TaskService {
     }
   }
 
-  async updateTaskAndSubtasks(maintask: Task, subtasks: Task[]): Promise<void> {
-    try {
-      const maintaskRef = doc(this.firestore, 'todos', maintask.id);
-      await setDoc(maintaskRef, maintask, { merge: true });
-  
-      const subtasksObservable = await this.loadSubtasks(maintask.id);
-      const existingSubtasks = await firstValueFrom(subtasksObservable);
-  
-      const currentSubtaskIds = new Set(subtasks.map(subtask => subtask.id));
-  
-      await Promise.all(existingSubtasks.map(async (existingSubtask) => {
-        if (!currentSubtaskIds.has(existingSubtask.id)) {
-          const subtaskRef = doc(this.firestore, 'todos', existingSubtask.id);
-          await deleteDoc(subtaskRef);
-        }
-      }));
-  
-      await Promise.all(subtasks.map(async (subtask) => {
-        const subtaskRef = doc(this.firestore, 'todos', subtask.id);
-        await setDoc(subtaskRef, subtask, { merge: true });
-      }));
-  
-      this.refreshTasks();
-    } catch (error) {
-      console.error('Error updating/deleting tasks and subtasks', error);
-      throw error;
-    }
-  }
-  
-  
-
-  async loadSubtasks(maintaskId: string): Promise<Observable<Task[]>> {
-    const subtaskQuery = query(
-      collection(this.firestore, 'todos'),
-      where('parentId', '==', maintaskId)
-    );
-    return await collectionData(subtaskQuery, { idField: 'id' });
-  }
-
-  async updateTask(taskData: Task, id: string): Promise<void> {
-    const userId =
-      this.currentUser?.uid || this.localUid || this.generateLocalUid();
-    if (!userId) {
-      console.log('updateTask requires a user ID');
-      return;
-    }
-
-    try {
-      const task = { ...taskData, userId: userId };
-      await setDoc(doc(this.firestore, 'todos', id), task);
-      this.refreshTasks();
-    } catch (error) {
-      console.error('Error updating task in Firestore', error);
-    }
-  }
-
   async deleteTask(id: string): Promise<void> {
     const userId =
       this.currentUser?.uid || this.localUid || this.generateLocalUid();
@@ -393,16 +364,4 @@ export class TaskService {
       console.error('Error deleting task from Firestore', error);
     }
   }
-
-  private refreshTasks(): void {
-    this.loadTasks().subscribe({
-      next: (tasks) => {
-        this.tasksSubject.next(tasks);
-      },
-      error: (error) => {
-        console.error('Error fetching tasks:', error);
-      }
-    });
-  }
-  
 }

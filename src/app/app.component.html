@@ -1,7 +1,9 @@
 <div class="site-layout">
   <div class="min-h-[100vh] h-full w-full py-10 flex bg-[#ffdf99] p-6">
     <!-- Sidebar -->
-    <div class="w-16 h-full flex flex-col items-center justify-between py-4 rounded-lg mr-4">
+    <div
+      class="w-16 h-full flex flex-col items-center justify-between py-4 rounded-lg mr-4"
+    >
       <button
         class="rounded-xl w-12 h-12 bg-gradient-to-tl to-[#1c7eff] from-[#90dbff] flex items-center justify-center m-4 shadow-md shadow-[#ffd358]"
         title="New task"
@@ -15,9 +17,13 @@
     <div class="flex flex-col w-full space-y-4 space-x-4">
       <!-- Task Grid -->
       <div class="container mx-auto px-4">
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-white rounded-3xl p-6 min-h-[91vh] shadow-xl shadow-[#ffd358]">
+        <div
+          class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-white rounded-3xl p-6 min-h-[91vh] shadow-xl shadow-[#ffd358]"
+        >
           @for (task of this.tasks; track task.maintask.id) {
-          <div class="bg-[#f2f4fa] p-6 rounded-3xl relative min-w-80 overflow-y-scroll max-h-80 mx-3">
+          <div
+            class="bg-[#f2f4fa] p-6 rounded-3xl relative min-w-80 overflow-y-scroll max-h-80 mx-3"
+          >
             <div class="flex justify-between items-center mb-4">
               <div class="flex items-center">
                 <mat-checkbox
@@ -32,24 +38,36 @@
               <div
                 class="py-2 px-3 text-white text-sm font-bold rounded-2xl"
                 [ngClass]="{
-                  'bg-[#ffdad8] text-red-900 px-4': task.maintask.priority == 'high',
-                  'bg-[#ffdeaa] text-amber-900': task.maintask.priority == 'medium',
-                  'bg-[#b2f1c1] text-green-800 px-5': task.maintask.priority == 'low',
-                  'bg-gray-300 text-gray-700 px-4': task.maintask.priority == 'none'
+                  'bg-[#ffdad8] text-red-900 px-4':
+                    task.maintask.priority == 'high',
+                  'bg-[#ffdeaa] text-amber-900':
+                    task.maintask.priority == 'medium',
+                  'bg-[#b2f1c1] text-green-800 px-5':
+                    task.maintask.priority == 'low',
+                  'bg-gray-300 text-gray-700 px-4':
+                    task.maintask.priority == 'none'
                 }"
               >
                 {{ task.maintask.priority | titlecase }}
               </div>
-              <button mat-icon-button [matMenuTriggerFor]="taskMenu" class="absolute right-2">
+              <button
+                mat-icon-button
+                [matMenuTriggerFor]="taskMenu"
+                class="absolute right-2"
+              >
                 <mat-icon>more_vert</mat-icon>
               </button>
               <mat-menu #taskMenu="matMenu">
                 <button mat-menu-item (click)="openEditor(task.maintask)">
-                  <mat-icon class="text-gray-600 material-icons-outlined">edit</mat-icon>
+                  <mat-icon class="text-gray-600 material-icons-outlined"
+                    >edit</mat-icon
+                  >
                   Edit
                 </button>
                 <button mat-menu-item (click)="deleteTask(task.maintask)">
-                  <mat-icon class="text-gray-600 material-icons-outlined">delete</mat-icon>
+                  <mat-icon class="text-gray-600 material-icons-outlined"
+                    >delete</mat-icon
+                  >
                   Delete
                 </button>
               </mat-menu>
@@ -64,7 +82,11 @@
                   [checked]="subtask.completed"
                   class="text-gray-500"
                 ></mat-checkbox>
-                <p class="ml-2 text-gray-600 {{ subtask.completed ? 'line-through' : '' }}">
+                <p
+                  class="ml-2 text-gray-600 {{
+                    subtask.completed ? 'line-through' : ''
+                  }}"
+                >
                   {{ subtask.title }}
                 </p>
               </li>
@@ -78,7 +100,9 @@
 
     <!-- Task Editor -->
     @if (showEditor) {
-    <div class="w-full md:w-1/2 p-6 bg-white transition-all duration-300 ease-in-out rounded-3xl relative shadow-xl shadow-[#ffd358] overflow-y-scroll max-h-[91vh]">
+    <div
+      class="w-full md:w-1/2 p-6 bg-white transition-all duration-300 ease-in-out rounded-3xl relative shadow-xl shadow-[#ffd358] overflow-y-scroll max-h-[91vh]"
+    >
       <button (click)="closeEditor()" class="absolute top-3 right-4 m-4">
         <mat-icon>close</mat-icon>
       </button>
@@ -93,7 +117,11 @@
       <form [formGroup]="taskForm" (ngSubmit)="submit()">
         <mat-form-field class="w-full mb-4 mt-16">
           <mat-label>Title</mat-label>
-          <input matInput formControlName="title" placeholder="Develop the app" />
+          <input
+            matInput
+            formControlName="title"
+            placeholder="Develop the app"
+          />
         </mat-form-field>
         <div class="flex items-center mb-4 justify-between">
           <div class="flex flex-col items-start space-y-1">
@@ -106,13 +134,19 @@
             </mat-button-toggle-group>
           </div>
           <mat-slide-toggle formControlName="flagged">Flag</mat-slide-toggle>
-        </div>        
+        </div>
         @if(imagePreview()) {
-          <div class="mt-4">
-            <h3 class="font-medium">From image</h3>
-            <h4 class="text-slate-500">Subtasks added from the following image</h4>
-            <img [src]="imagePreview()" alt="Task Image" class="rounded-2xl max-h-60 object-cover mt-2" />
-          </div>
+        <div class="mt-4">
+          <h3 class="font-medium">From image</h3>
+          <h4 class="text-slate-500">
+            Subtasks added from the following image
+          </h4>
+          <img
+            [src]="imagePreview()"
+            alt="Task Image"
+            class="rounded-2xl max-h-60 object-cover mt-2"
+          />
+        </div>
         }
 
         <div class="mt-6">
@@ -126,32 +160,50 @@
               class="w-full p-2 border rounded"
             />
             <button
-              (click)="addSubtask(); $event.stopPropagation(); $event.preventDefault()"
+              (click)="
+                addSubtask(); $event.stopPropagation(); $event.preventDefault()
+              "
               class="border-2 border-blue-200 rounded-2xl p-2 text-[#3e5f90]"
             >
               +
             </button>
           </div>
           <div class="flex items-center space-x-2 mb-4">
+            <div
+              (drop)="onFileDrop($event)"
+              (dragover)="onDragOver($event)"
+              class="drop-area"
+            >
+              <button
+                (click)="
+                  moreSubtaskInput.click();
+                  $event.stopPropagation();
+                  $event.preventDefault()
+                "
+                class="text-sm border-2 border-[#4eabff] rounded-lg p-2 flex items-center space-x-2"
+              >
+                <mat-icon class="text-[#3e5f90]">add_photo_alternate</mat-icon>
+                <span>From Image</span>
+              </button>
+              <input
+                type="file"
+                accept="image/*"
+                (change)="generateSubtasksFromImage($event)"
+                hidden
+                #moreSubtaskInput
+              />
+            </div>
             <button
-              (click)="moreSubtaskInput.click(); $event.stopPropagation(); $event.preventDefault()"
+              (click)="
+                generateSubtasksFromTitle();
+                $event.stopPropagation();
+                $event.preventDefault()
+              "
               class="text-sm border-2 border-[#4eabff] rounded-lg p-2 flex items-center space-x-2"
             >
-              <mat-icon class="text-[#3e5f90]">add_photo_alternate</mat-icon>
-              <span>From Image</span>
-            </button>
-            <input
-              type="file"
-              accept="image/*"
-              (change)="generateSubtasksFromImage($event)"
-              hidden
-              #moreSubtaskInput
-            />
-            <button
-              (click)="generateSubtasksFromTitle(); $event.stopPropagation(); $event.preventDefault()"
-              class="text-sm border-2 border-[#4eabff] rounded-lg p-2 flex items-center space-x-2"
-            >
-              <mat-icon class="text-[#3e5f90]">format_list_bulleted_add</mat-icon>
+              <mat-icon class="text-[#3e5f90]"
+                >format_list_bulleted_add</mat-icon
+              >
               <span>From Title</span>
             </button>
           </div>
@@ -159,7 +211,6 @@
           <ul class="mt-4 space-y-2">
             @for (subtask of this.subtasks; track subtask.task.id) {
             <li class="flex items-center">
-
               <p class="ml-2">{{ subtask.task.title }}</p>
               <button
                 mat-icon-button
@@ -170,15 +221,21 @@
               </button>
               <mat-menu #subtaskMenu="matMenu">
                 <button mat-menu-item (click)="moveSubtaskUp(subtask)">
-                  <mat-icon class="text-gray-600 material-icons-outlined">keyboard_arrow_up</mat-icon>
+                  <mat-icon class="text-gray-600 material-icons-outlined"
+                    >keyboard_arrow_up</mat-icon
+                  >
                   Move order up
                 </button>
                 <button mat-menu-item (click)="moveSubtaskDown(subtask)">
-                  <mat-icon class="text-gray-600 material-icons-outlined">keyboard_arrow_down</mat-icon>
+                  <mat-icon class="text-gray-600 material-icons-outlined"
+                    >keyboard_arrow_down</mat-icon
+                  >
                   Move order down
                 </button>
                 <button mat-menu-item (click)="deleteSubtask(subtask)">
-                  <mat-icon class="text-gray-600 material-icons-outlined">delete</mat-icon>
+                  <mat-icon class="text-gray-600 material-icons-outlined"
+                    >delete</mat-icon
+                  >
                   Delete
                 </button>
               </mat-menu>
