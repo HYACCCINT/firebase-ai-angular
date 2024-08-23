@@ -317,7 +317,6 @@ export class AppComponent {
           : 'none',
       };
 
-      this.tasks.push({ maintask: newTask, subtasks: [] });
       this.openEditor(newTask);
     } catch (error) {
       this.handleError(error, 'Failed to generate main task');
