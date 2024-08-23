@@ -106,25 +106,51 @@ export class TaskService {
     this.login();
   }
 
-  async generateMainTask(): Promise<any> {
-    const activeTasks = this.tasksSubject
-      .getValue()
-      .filter((task) => !task.completed);
-    console.log(activeTasks);
-    const prompt = `provide a major task that someone ${
-      activeTasks.length > 0
-        ? `might do the day after relating to this task ${JSON.stringify(
-            activeTasks[0].title
-          )}`
-        : `creating a task list today might want to do in a friendly tone`
-    } using this JSON schema: { "type": "object", "properties": { "title": { "type": "string" }, "description": { "type": "string" }, "priority": { "type": "string" }, } }`;
-    try {
-      const result = await this.experimentModel.generateContent(prompt);
-      return JSON.parse(result.response.text());
-    } catch (error) {
-      console.error('Failed to generate task', error);
-      throw error;
-    }
+  login(): void {
+    signInAnonymously(this.auth).catch((error) => {
+      console.error('Anonymous login failed:', error);
+      // Continue without authentication, relying on the local UID
+    });
+  }
+
+  logout(): void {
+    signOut(this.auth)
+      .then(() => {
+        console.log('Signed out');
+      })
+      .catch((error) => console.error('Sign out error:', error));
+  }
+
+  private generateLocalUid(): string {
+    return 'local-' + uuidv4();
+  }
+
+  loadTasks(): Observable<Task[]> {
+    const taskQuery = query(
+      collection(this.firestore, 'todos'),
+      orderBy('createdTime', 'desc')
+    );
+
+    return collectionData(taskQuery, { idField: 'id' }) as Observable<Task[]>;
+  }
+
+  async loadSubtasks(maintaskId: string): Promise<Observable<Task[]>> {
+    const subtaskQuery = query(
+      collection(this.firestore, 'todos'),
+      where('parentId', '==', maintaskId)
+    );
+    return await collectionData(subtaskQuery, { idField: 'id' });
+  }
+
+  private refreshTasks(): void {
+    this.loadTasks().subscribe({
+      next: (tasks) => {
+        this.tasksSubject.next(tasks);
+      },
+      error: (error) => {
+        console.error('Error fetching tasks:', error);
+      },
+    });
   }
 
   createTaskRef(id?: string) {
@@ -146,107 +172,56 @@ export class TaskService {
     } as any;
   }
 
-  async generateTaskFromImage(file: File | null, title?: String): Promise<any> {
-    if (!file) {
-      return {
-        maintask: null,
-        subTasks: [],
-      };
-    }
-    const imagePart = await this.fileToGenerativePart(file);
-    const prompt = `Based on the ${
-      title ? `title "${title}" but more importantly in regards to the ` : ''
-    }image in the input, generate multiple subtasks in an array that are required to complete the main task in the title, put emphasis on the image. The output should be in the format:
-    {
-      "subtasks": [{
-        "title": { "type": "string" },
-        "order": { "type": "int" }
-      }]
-    }.`;
+  async generateMaintask(): Promise<any> {
+    const activeTasks = this.tasksSubject
+      .getValue()
+      .filter((task) => !task.completed);
+    console.log(activeTasks);
+    const prompt = `provide a major task that someone ${
+      activeTasks.length > 0
+        ? `might do the day after relating to this task ${JSON.stringify(
+            activeTasks[0].title
+          )}`
+        : `creating a task list today might want to do in a friendly tone`
+    } using this JSON schema: { "type": "object", "properties": { "title": { "type": "string" }, "description": { "type": "string" }, "priority": { "type": "string" }, } }`;
     try {
-      const result = await this.experimentModel.generateContent([
-        prompt,
-        imagePart,
-      ]);
-
-      const response = result.response.text();
-      return JSON.parse(response);
+      const result = await this.experimentModel.generateContent(prompt);
+      return JSON.parse(result.response.text());
     } catch (error) {
       console.error('Failed to generate task', error);
       throw error;
     }
   }
 
-  async generateSubtasksFromTitle(title: string): Promise<any> {
-    if (!title) {
+  async generateSubtasks(input: { file?: File | null; title?: string }): Promise<any> {
+    const { file, title } = input;
+  
+    if (!file && !title) {
       return {
         subtasks: [],
       };
     }
-
-    const prompt = `Generate multiple subtasks that are required to complete the main task titled "${title}". The output should be in the format:
-    {"subtasks": [{
-        "title": { "type": "string" },
-        "order": { "type": "int" }
-  }]}
-    .`;
-
+  
+    const imagePart = file ? await this.fileToGenerativePart(file) : '';
+    const prompt =  `Based on the ${title ? `title "${title}" ` : ''} ${file ? "but more importantly in regards to the image in the input," : ''}  generate multiple subtasks in an array that are required to complete the main task in the title. The output should be in the format:
+      {
+        "subtasks": [{
+          "title": { "type": "string" },
+          "order": { "type": "int" }
+        }]
+      }.`;
+  
     try {
-      const result = await this.experimentModel.generateContent([prompt]);
+      const result = await this.experimentModel.generateContent([prompt, imagePart].filter(Boolean));
       const response = await result.response.text();
       return JSON.parse(response);
     } catch (error) {
-      console.error('Failed to generate subtasks from title', error);
+      console.error('Failed to generate subtasks', error);
       throw error;
     }
   }
 
-  private generateLocalUid(): string {
-    return 'local-' + uuidv4();
-  }
-
-  login(): void {
-    signInAnonymously(this.auth).catch((error) => {
-      console.error('Anonymous login failed:', error);
-      // Continue without authentication, relying on the local UID
-    });
-  }
-
-  logout(): void {
-    signOut(this.auth)
-      .then(() => {
-        console.log('Signed out');
-      })
-      .catch((error) => console.error('Sign out error:', error));
-  }
-
-  loadTasks(): Observable<Task[]> {
-    const taskQuery = query(
-      collection(this.firestore, 'todos'),
-      orderBy('createdTime', 'desc')
-    );
-
-    return collectionData(taskQuery, { idField: 'id' }) as Observable<Task[]>;
-  }
-
-  async loadSubtasks(maintaskId: string): Promise<Observable<Task[]>> {
-    const subtaskQuery = query(
-      collection(this.firestore, 'todos'),
-      where('parentId', '==', maintaskId)
-    );
-    return await collectionData(subtaskQuery, { idField: 'id' });
-  }
-  private refreshTasks(): void {
-    this.loadTasks().subscribe({
-      next: (tasks) => {
-        this.tasksSubject.next(tasks);
-      },
-      error: (error) => {
-        console.error('Error fetching tasks:', error);
-      },
-    });
-  }
-  async addMainTaskWithSubtasks(
+  async addMaintaskWithSubtasks(
     maintask: Omit<Task, 'id'>,
     subtasks: Omit<Task, 'id'>[]
   ): Promise<void> {
@@ -255,13 +230,13 @@ export class TaskService {
 
     try {
       const maintaskRef = doc(collection(this.firestore, 'todos'));
-      const newMainTask: Task = {
+      const newMaintask: Task = {
         ...maintask,
         id: maintaskRef.id,
         owner: userId,
         createdTime: Timestamp.fromDate(new Date()),
       };
-      await setDoc(maintaskRef, newMainTask);
+      await setDoc(maintaskRef, newMaintask);
 
       for (let [index, subtask] of subtasks.entries()) {
         const subtaskRef = doc(collection(this.firestore, 'todos'));
@@ -281,7 +256,8 @@ export class TaskService {
       console.error('Error adding main task and subtasks to Firestore', error);
     }
   }
-  async updateTaskAndSubtasks(maintask: Task, subtasks: Task[]): Promise<void> {
+
+  async updateMaintaskAndSubtasks(maintask: Task, subtasks: Task[]): Promise<void> {
     try {
       const maintaskRef = doc(this.firestore, 'todos', maintask.id);
       await setDoc(maintaskRef, maintask, { merge: true });
@@ -314,23 +290,7 @@ export class TaskService {
     }
   }
 
-  async updateTask(taskData: Task, id: string): Promise<void> {
-    const userId =
-      this.currentUser?.uid || this.localUid || this.generateLocalUid();
-    if (!userId) {
-      console.log('updateTask requires a user ID');
-      return;
-    }
-
-    try {
-      const task = { ...taskData, userId: userId };
-      await setDoc(doc(this.firestore, 'todos', id), task);
-      this.refreshTasks();
-    } catch (error) {
-      console.error('Error updating task in Firestore', error);
-    }
-  }
-  async deleteMainTaskAndSubtasks(maintaskId: string): Promise<void> {
+  async deleteMaintaskAndSubtasks(maintaskId: string): Promise<void> {
     try {
       const subtasksObservable = await this.loadSubtasks(maintaskId);
 
@@ -353,10 +313,20 @@ export class TaskService {
     }
   }
 
-  async deleteTask(id: string): Promise<void> {
+  async updateTask(taskData: Task, id: string): Promise<void> {
     const userId =
       this.currentUser?.uid || this.localUid || this.generateLocalUid();
 
+    try {
+      const task = { ...taskData, userId: userId };
+      await setDoc(doc(this.firestore, 'todos', id), task);
+      this.refreshTasks();
+    } catch (error) {
+      console.error('Error updating task in Firestore', error);
+    }
+  }
+
+  async deleteTask(id: string): Promise<void> {
     try {
       await deleteDoc(doc(this.firestore, 'todos', id));
       this.refreshTasks();

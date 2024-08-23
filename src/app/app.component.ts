@@ -52,19 +52,11 @@ export class AppComponent {
   selectedTaskId: string | null = null;
   tasks: any[] = [];
   subtasks: { task: Task; editing: boolean }[] = []; // List of subtasks with editing state
-  showDescriptionInput = false;
-  descriptionInput = '';
   newSubtaskTitle = '';
-  maxFileSizeMB = 20;
 
-  imageName = signal('');
-  fileSize = signal(0);
-  uploadProgress = signal(0);
+
   imagePreview = signal('');
   @ViewChild('fileInput') fileInput: ElementRef | undefined;
-  selectedFile: File | null = null;
-  uploadSuccess: boolean = false;
-  uploadError: boolean = false;
 
   constructor(
     public taskService: TaskService,
@@ -75,7 +67,7 @@ export class AppComponent {
   ngOnInit(): void {
     this.initForm();
     this.loadTasks();
-    this.generateMainTask();
+    this.generateMaintask();
   }
 
   initForm(): void {
@@ -84,6 +76,90 @@ export class AppComponent {
       priority: ['none', Validators.required],
       completed: [false],
       flagged: [false],
+    });
+  }
+
+  openEditor(task: Task | null = null): void {
+    this.showEditor = true;
+    if (task) {
+      this.selectedTaskId = task.id;
+      this.taskForm.patchValue({
+        ...task,
+      });
+
+      this.loadSubtasks(task.id);
+    } else {
+      this.selectedTaskId = null;
+    }
+  }
+
+  closeEditor(): void {
+    this.showEditor = false;
+    this.resetForm();
+  }
+
+  submit(): void {
+    if (this.taskForm.invalid) {
+      this.handleError('Form invalid', 'Please check all fields');
+      return;
+    }
+
+    const newTaskRef = this.selectedTaskId
+      ? this.taskService.createTaskRef(this.selectedTaskId)
+      : this.taskService.createTaskRef(); // Generate Firestore ID only if new
+
+    const maintaskInput: Task = {
+      ...this.taskForm.value,
+      id: this.selectedTaskId || newTaskRef.id,
+      owner: this.taskService.currentUser?.uid || this.taskService.localUid!,
+      createdTime: Timestamp.fromDate(new Date()),
+    };
+
+    const subtaskInput = this.subtasks.map((subtask, index) => ({
+      ...subtask.task,
+      parentId: this.selectedTaskId || newTaskRef.id,
+      order: index,
+    }));
+
+    const existingTaskIndex = this.tasks.findIndex(
+      (t) => t.maintask.id === maintaskInput.id
+    );
+
+    if (existingTaskIndex !== -1) {
+      this.tasks[existingTaskIndex] = {
+        maintask: maintaskInput,
+        subtasks: subtaskInput,
+      };
+    } else {
+      this.tasks.push({ maintask: maintaskInput, subtasks: subtaskInput });
+    }
+
+    this.taskService.tasksSubject.next([...this.tasks]);
+
+    if (this.selectedTaskId) {
+      this.taskService.updateMaintaskAndSubtasks(maintaskInput, subtaskInput);
+    } else {
+      this.taskService.addMaintaskWithSubtasks(maintaskInput, subtaskInput);
+    }
+
+    this.closeEditor();
+  }
+
+  private resetForm(): void {
+    this.selectedTaskId = null;
+    this.subtasks = [];
+    this.taskForm.reset({
+      title: '',
+      priority: 'none',
+      completed: false,
+    });
+    this.imagePreview.set('');
+  }
+
+  handleError(error: any, userMessage: string): void {
+    console.error('Error:', error);
+    this.snackBar.open(userMessage, 'Close', {
+      duration: 3000,
     });
   }
 
@@ -150,120 +226,74 @@ export class AppComponent {
       });
   }
 
-  openEditor(task: Task | null = null): void {
-    this.showEditor = true;
-    if (task) {
-      this.selectedTaskId = task.id;
-      this.taskForm.patchValue({
-        ...task,
-      });
-
-      this.loadSubtasks(task.id);
-    } else {
-      this.selectedTaskId = null;
-    }
-  }
-
-  closeEditor(): void {
-    this.showEditor = false;
-    this.resetForm();
-  }
-
-  handleError(error: any, userMessage: string): void {
-    console.error('Error:', error);
-    this.snackBar.open(userMessage, 'Close', {
-      duration: 3000,
-    });
-  }
-
-  submit(): void {
-    if (this.taskForm.invalid) {
-      this.handleError('Form invalid', 'Please check all fields');
+  async handleFileInput(event: any): Promise<void> {
+    const file = event.target.files[0] as File | null;
+    if (!file) {
+      this.handleError(null, 'File not found');
       return;
     }
+  
+    const fileSizeMB = file.size / (1024 * 1024); // Convert bytes to MB
+    if (fileSizeMB > 20) {
+      this.handleError(
+        null,
+        'File size exceeds 20MB limit. Please select a smaller file.'
+      );
+      return;
+    }
+  
+    try {
+      await this.displayImagePreview(file);
+      const title = this.taskForm.get('title')?.value || '';
+      const generatedSubtasks = await this.taskService.generateSubtasks({ file, title });
+      this.addSubtasksToList(generatedSubtasks.subtasks);
+    } catch (error) {
+      this.handleError(error, 'Failed to generate subtasks from image.');
+    }
+  }
 
-    const newTaskRef = this.selectedTaskId
-      ? this.taskService.createTaskRef(this.selectedTaskId)
-      : this.taskService.createTaskRef(); // Generate Firestore ID only if new
+  async handleTitleInput(): Promise<void> {
+    const title = this.taskForm.get('title')?.value;
+  
+    if (!title) {
+      this.handleError(
+        'Empty title',
+        'Please enter a title for the main task first.'
+      );
+      return;
+    }
+  
+    try {
+      const generatedSubtasks = await this.taskService.generateSubtasks({ title });
+      this.addSubtasksToList(generatedSubtasks.subtasks);
+    } catch (error) {
+      this.handleError(error, 'Failed to generate subtasks from title.');
+    }
+  }
 
-    const maintaskInput: Task = {
-      ...this.taskForm.value,
-      id: this.selectedTaskId || newTaskRef.id,
-      owner: this.taskService.currentUser?.uid || this.taskService.localUid!,
-      createdTime: Timestamp.fromDate(new Date()),
-    };
-
-    const subtaskInput = this.subtasks.map((subtask, index) => ({
-      ...subtask.task,
-      parentId: this.selectedTaskId || newTaskRef.id,
-      order: index,
+  private addSubtasksToList(subtasks: any[]): void {
+    const owner = this.taskService.currentUser?.uid || this.taskService.localUid!;
+    const currentTime = Timestamp.fromDate(new Date());
+  
+    const newSubtasks = subtasks.map((subtask: any, index: number) => ({
+      task: {
+        id: this.taskService.createTaskRef().id,
+        title: subtask.title,
+        completed: false,
+        parentId: this.selectedTaskId || '', // Placeholder, to be set on save
+        order: this.subtasks.length + index,
+        owner: owner,
+        createdTime: currentTime,
+      },
+      editing: false,
     }));
-
-    const existingTaskIndex = this.tasks.findIndex(
-      (t) => t.maintask.id === maintaskInput.id
-    );
-
-    if (existingTaskIndex !== -1) {
-      this.tasks[existingTaskIndex] = {
-        maintask: maintaskInput,
-        subtasks: subtaskInput,
-      };
-    } else {
-      this.tasks.push({ maintask: maintaskInput, subtasks: subtaskInput });
-    }
-
-    this.taskService.tasksSubject.next([...this.tasks]);
-
-    if (this.selectedTaskId) {
-      this.taskService.updateTaskAndSubtasks(maintaskInput, subtaskInput);
-    } else {
-      this.taskService.addMainTaskWithSubtasks(maintaskInput, subtaskInput);
-    }
-
-    this.closeEditor();
+  
+    this.subtasks = this.subtasks.concat(newSubtasks);
   }
 
-  private resetForm(): void {
-    this.selectedTaskId = null;
-    this.subtasks = [];
-    this.showDescriptionInput = false;
-    this.descriptionInput = '';
-    this.taskForm.reset({
-      title: '',
-      priority: 'none',
-      completed: false,
-    });
-    this.removeImage();
-  }
-
-  addSubtask(): void {
-    if (!this.newSubtaskTitle.trim()) {
-      this.handleError('Empty title', 'Please populate table');
-      return;
-    }
-
-    const newSubtask: Task = {
-      id: this.taskService.createTaskRef().id,
-      title: this.newSubtaskTitle.trim(),
-      completed: false,
-      parentId: this.selectedTaskId || '',
-      order: this.subtasks.length,
-      owner: this.taskService.currentUser?.uid || this.taskService.localUid!,
-      createdTime: Timestamp.fromDate(new Date()),
-    };
-
-    this.subtasks.push({ task: newSubtask, editing: false });
-    this.newSubtaskTitle = '';
-  }
-
-  deleteSubtask(subtask: { task: Task; editing: boolean }): void {
-    this.subtasks = this.subtasks.filter(
-      (st) => st.task.id !== subtask.task.id
-    );
-  }
-  generateMainTask(): void {
+  generateMaintask(): void {
     this.taskService
-      .generateMainTask()
+      .generateMaintask()
       .then((generatedTask: any) => {
         const newTaskRef = this.taskService.createTaskRef();
         const newTask: Task = {
@@ -285,123 +315,8 @@ export class AppComponent {
         this.handleError(error, 'Failed to generate main task');
       });
   }
-  async generateSubtasksFromTitle(): Promise<void> {
-    const maintaskTitle = this.taskForm.get('title')?.value;
 
-    if (!maintaskTitle)
-      if (this.taskForm.invalid) {
-        this.handleError(
-          'Empty title',
-          'Please enter a title for the main task first.'
-        );
-        return;
-      }
-
-    try {
-      // Call the service to generate subtasks based on the title
-      const generatedSubtasks =
-        await this.taskService.generateSubtasksFromTitle(maintaskTitle);
-
-      const owner =
-        this.taskService.currentUser?.uid || this.taskService.localUid!;
-      const currentTime = Timestamp.fromDate(new Date());
-
-      const newSubtasks = [];
-
-      for (let [index, subtask] of generatedSubtasks.subtasks.entries()) {
-        const newSubtask = {
-          task: {
-            id: this.taskService.createTaskRef().id,
-            title: subtask.title,
-            completed: false,
-            parentId: '',
-            order: this.subtasks.length + index,
-            owner: owner,
-            createdTime: currentTime,
-          },
-          editing: false,
-        } as any;
-        newSubtasks.push(newSubtask);
-      }
-      this.subtasks = this.subtasks.concat(newSubtasks);
-    } catch (error) {
-      console.error('Failed to generate subtasks from title', error);
-      this.snackBar.open('Failed to generate subtasks', 'Close', {
-        duration: 3000,
-      });
-    }
-  }
-  async generateSubtasksFromImage(event: any): Promise<void> {
-    const file = event.target.files[0] as File | null;
-    if (!file) {
-      this.handleError(null, 'File not found');
-      return;
-    }
-
-    const fileSizeMB = file.size / (1024 * 1024); // Convert bytes to MB
-    if (fileSizeMB > this.maxFileSizeMB) {
-      this.handleError(
-        null,
-        'File size exceeds 20MB limit. Please select a smaller file.'
-      );
-      return;
-    }
-
-    try {
-      await this.displayImagePreview(file);
-      await this.generateTaskFromImage(
-        file,
-        this.taskForm.get('title')?.value || ''
-      );
-    } catch (error) {
-      this.handleError(error, 'Failed to generate subtasks from image.');
-    }
-  }
-
-  async generateTaskFromImage(
-    file: File | null,
-    title?: string
-  ): Promise<void> {
-    try {
-      const generatedTask = await this.taskService.generateTaskFromImage(
-        file,
-        title
-      );
-
-      const owner =
-        this.taskService.currentUser?.uid || this.taskService.localUid!;
-      const currentTime = Timestamp.fromDate(new Date());
-
-      // Create an array to store the new subtasks
-      const newSubtasks = [];
-
-      for (let subtask of generatedTask.subtasks) {
-        const newSubtask = {
-          task: {
-            ...subtask,
-            parentId: this.selectedTaskId || '', // Placeholder, to be set on save
-            id: this.taskService.createTaskRef().id,
-            order: this.subtasks.length + newSubtasks.length, // Add to the end of the current subtasks
-            createdTime: currentTime,
-            owner: owner,
-            completed: false,
-          },
-          editing: false,
-        } as any;
-        newSubtasks.push(newSubtask);
-      }
-
-      this.subtasks = this.subtasks.concat(newSubtasks);
-    } catch (error) {
-      console.error('Failed to generate task', error);
-      this.snackBar.open('Failed to generate task', 'Close', {
-        duration: 3000,
-      });
-    }
-  }
-
-  updateComplete(task: Task): void {
-    // Toggle the completed status
+  completeTask(task: Task): void {
     const updated = { ...task, completed: !task.completed };
 
     if (!task.parentId) {
@@ -436,53 +351,74 @@ export class AppComponent {
       });
   }
 
-  moveSubtaskUp(subtask: { task: Task; editing: boolean }): void {
-    const index = this.subtasks.findIndex(
-      (st) => st.task.id === subtask.task.id
-    );
-    if (index > 0) {
+  addSubtask(): void {
+    if (!this.newSubtaskTitle.trim()) {
+      this.handleError('Empty title', 'Please populate title');
+      return;
+    }
+
+    const newSubtask: Task = {
+      id: this.taskService.createTaskRef().id,
+      title: this.newSubtaskTitle.trim(),
+      completed: false,
+      parentId: this.selectedTaskId || '',
+      order: this.subtasks.length,
+      owner: this.taskService.currentUser?.uid || this.taskService.localUid!,
+      createdTime: Timestamp.fromDate(new Date()),
+    };
+
+    this.subtasks.push({ task: newSubtask, editing: false });
+    this.newSubtaskTitle = '';
+  }
+
+  moveSubtaskOrder(subtask: { task: Task; editing: boolean }, direction: 'up' | 'down'): void {
+    const index = this.subtasks.findIndex((st) => st.task.id === subtask.task.id);
+  
+    if (direction === 'up' && index > 0) {
       [this.subtasks[index], this.subtasks[index - 1]] = [
         this.subtasks[index - 1],
         this.subtasks[index],
       ];
-      this.updateSubtaskOrder();
-    }
-  }
-
-  moveSubtaskDown(subtask: { task: Task; editing: boolean }): void {
-    const index = this.subtasks.findIndex(
-      (st) => st.task.id === subtask.task.id
-    );
-    if (index < this.subtasks.length - 1) {
+    } else if (direction === 'down' && index < this.subtasks.length - 1) {
       [this.subtasks[index], this.subtasks[index + 1]] = [
         this.subtasks[index + 1],
         this.subtasks[index],
       ];
-      this.updateSubtaskOrder();
+    }
+
+    this.subtasks.forEach((st, i) => {
+      st.task.order = i;
+    });
+  }
+
+  deleteMaintaskAndSubtasks(task: Task): void {
+    if (task.id) {
+      this.taskService.deleteMaintaskAndSubtasks(task.id);
     }
   }
 
-  updateSubtaskOrder(): void {
-    this.subtasks.forEach((subtask, index) => {
-      subtask.task.order = index;
-    });
-  }
-  deleteTask(task: Task): void {
-    if (task.id) {
-      this.taskService.deleteMainTaskAndSubtasks(task.id);
-    }
+  deleteSubtask(subtask: { task: Task; editing: boolean }): void {
+    this.subtasks = this.subtasks.filter(
+      (st) => st.task.id !== subtask.task.id
+    );
   }
 
   async onFileDrop(event: DragEvent): Promise<void> {
     event.preventDefault();
     const file = event.dataTransfer?.files[0] as File | null;
-    const title = this.taskForm.get('title')?.value;
-    await this.generateTaskFromImage(file, title);
+  
+    if (file) {
+      const inputEvent = { target: { files: [file] } } as any;
+      await this.handleFileInput(inputEvent);
+    } else {
+      this.handleError(null, 'No file detected in the drop event.');
+    }
   }
 
   onDragOver(event: DragEvent): void {
     event.preventDefault();
   }
+
   private async displayImagePreview(file: File): Promise<void> {
     const reader = new FileReader();
     reader.onload = () => {
@@ -491,13 +427,4 @@ export class AppComponent {
     reader.readAsDataURL(file);
   }
 
-  removeImage(): void {
-    this.selectedFile = null;
-    this.imageName.set('');
-    this.fileSize.set(0);
-    this.imagePreview.set('');
-    this.uploadSuccess = false;
-    this.uploadError = false;
-    this.uploadProgress.set(0);
-  }
 }

@@ -4,12 +4,17 @@
     <div
       class="w-16 h-full flex flex-col items-center justify-between py-4 rounded-lg mr-4"
     >
+    <div
+    class="rounded-full w-12 h-12 bg-gradient-to-tl to-[#ffc403] from-[#e03700] flex items-center justify-center m-4 shadow-md shadow-[#ffd358]"
+  >
+    <mat-icon class="text-white font-extrabold">check</mat-icon>
+  </div>
       <button
         class="rounded-xl w-12 h-12 bg-gradient-to-tl to-[#1c7eff] from-[#90dbff] flex items-center justify-center m-4 shadow-md shadow-[#ffd358]"
         title="New task"
-        (click)="this.generateMainTask()"
+        (click)="this.generateMaintask()"
       >
-        <mat-icon class="text-white font-extrabold">add</mat-icon>
+        <mat-icon class="text-white font-extrabold">add_task</mat-icon>
       </button>
     </div>
 
@@ -27,7 +32,7 @@
             <div class="flex justify-between items-center mb-4">
               <div class="flex items-center">
                 <mat-checkbox
-                  (click)="updateComplete(task.maintask)"
+                  (click)="completeTask(task.maintask)"
                   [checked]="task.maintask.completed"
                   class="text-[#5A94E2]"
                 ></mat-checkbox>
@@ -64,7 +69,7 @@
                   >
                   Edit
                 </button>
-                <button mat-menu-item (click)="deleteTask(task.maintask)">
+                <button mat-menu-item (click)="deleteMaintaskAndSubtasks(task.maintask)">
                   <mat-icon class="text-gray-600 material-icons-outlined"
                     >delete</mat-icon
                   >
@@ -78,7 +83,7 @@
               @for (subtask of task.subtasks; track subtask.id) {
               <li class="flex items-center">
                 <mat-checkbox
-                  (click)="updateComplete(subtask)"
+                  (click)="completeTask(subtask)"
                   [checked]="subtask.completed"
                   class="text-gray-500"
                 ></mat-checkbox>
@@ -188,14 +193,14 @@
               <input
                 type="file"
                 accept="image/*"
-                (change)="generateSubtasksFromImage($event)"
+                (change)="handleFileInput($event)"
                 hidden
                 #moreSubtaskInput
               />
             </div>
             <button
               (click)="
-                generateSubtasksFromTitle();
+                handleTitleInput();
                 $event.stopPropagation();
                 $event.preventDefault()
               "
@@ -220,13 +225,13 @@
                 <mat-icon>more_vert</mat-icon>
               </button>
               <mat-menu #subtaskMenu="matMenu">
-                <button mat-menu-item (click)="moveSubtaskUp(subtask)">
+                <button mat-menu-item (click)="moveSubtaskOrder(subtask, 'up')">
                   <mat-icon class="text-gray-600 material-icons-outlined"
                     >keyboard_arrow_up</mat-icon
                   >
                   Move order up
                 </button>
-                <button mat-menu-item (click)="moveSubtaskDown(subtask)">
+                <button mat-menu-item (click)="moveSubtaskOrder(subtask, 'down')">
                   <mat-icon class="text-gray-600 material-icons-outlined"
                     >keyboard_arrow_down</mat-icon
                   >
