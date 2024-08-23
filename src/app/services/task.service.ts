@@ -47,22 +47,7 @@ export type TaskWithSubtasks = {
 const MODEL_CONFIG = {
   model: 'gemini-1.5-flash',
   generationConfig: { responseMimeType: 'application/json' },
-  systemInstruction: `Use this JSON schema: ${JSON.stringify({
-    type: 'object',
-    properties: {
-      maintask: {
-        title: { type: 'string' },
-        priority: { type: 'string' },
-      },
-      subtasks: [
-        {
-          title: { type: 'string' },
-          priority: { type: 'string' },
-          order: { type: 'int' },
-        },
-      ],
-    },
-  })}`,
+  systemInstruction: "Keep TODO titles short, ideally within 7 words"
 };
 
 @Injectable({
@@ -176,13 +161,18 @@ export class TaskService {
     const activeTasks = this.tasksSubject
       .getValue()
       .filter((task) => !task.completed && !task.parentId);
-    const prompt = `provide a major task that someone ${
+    const prompt = `Generate a TODO task that ${
       activeTasks.length > 0
-        ? `might do the day after relating to this task ${JSON.stringify(
-            activeTasks[0].title
-          )}`
-        : `might want to do or play in a day to day or seasonal basis`
-    } using this JSON schema: { "type": "object", "properties": { "title": { "type": "string" }, "description": { "type": "string" }, "priority": { "type": "string" }, } }`;
+        ? `is different from any of ${JSON.stringify(activeTasks[0].title)}.`
+        : `should be feasible in a few days at this time of the year`
+    } using this JSON schema: ${JSON.stringify({
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        description: { type: 'string' },
+        priority: { type: 'string' },
+      },
+    })}`;
     try {
       const result = await this.experimentModel.generateContent(prompt);
       return JSON.parse(result.response.text());
@@ -193,8 +183,9 @@ export class TaskService {
   }
 
   async generateSubtasks(input: {
-    file?: File | null;
-    title?: string;
+    file?: File;
+    title: string;
+    existingSubtasks: string[]
   }): Promise<any> {
     const { file, title } = input;
 
@@ -205,15 +196,19 @@ export class TaskService {
     }
 
     const imagePart = file ? await this.fileToGenerativePart(file) : '';
-    const prompt = `Based on the ${title ? `title "${title}" ` : ''} ${
-      file ? 'but more importantly in regards to the image in the input,' : ''
-    }  generate multiple subtasks in an array that are required to complete the main task in the title. The output should be in the format:
-      {
-        "subtasks": [{
-          "title": { "type": "string" },
-          "order": { "type": "int" }
-        }]
-      }.`;
+    const prompt = `Break this task down into smaller pieces ${
+      title ? `main task "${title}" ` : ''
+    } ${
+      file ? 'also consider the image in the input.' : ''
+    } excluding these existing subtasks ${input.existingSubtasks.join("\n")}. The output should be in the format:
+    ${JSON.stringify({
+      subtasks: [
+        {
+          title: { type: 'string' },
+          order: { type: 'int' },
+        },
+      ],
+    })}.`;
 
     try {
       const result = await this.experimentModel.generateContent(

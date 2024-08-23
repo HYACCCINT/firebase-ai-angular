@@ -1,20 +1,17 @@
-Make It So
-=============================
+# Make It So
 
 Make It So is a sample Todo app powered by Gemini AI, Firebase auth and firestore.
 
-Introduction
-------------
+## Introduction
 
 [Read more about Firebase](https://firebase.google.com/docs)
 [Read more about Gemini](https://ai.google.dev/gemini-api/docs/quickstart?lang=node)
 
-Setup and deploy in IDX
----------------
+## Setup and run in IDX
 
+TODO
 
-Setup and deploy locally
----------------
+## Setup and run locally
 
 ### Prerequisites
 
@@ -25,45 +22,50 @@ Setup and deploy locally
 ### Setup Instructions
 
 1. **Firebase setup:**
+
    - Create your project on the [Firebase Console](https://console.firebase.google.com).
    - Enable Firestore and anonymous authentication in the Firebase console.
    - Copy your Firebase config object ("Add Firebase to your web app"), and paste it into the `src/environments.ts` file.
 
-2. **Gemini setup:**
+1. **Gemini setup:**
+
    - Generate your Gemini API keys from [Google AI Gemini](https://ai.google.dev/gemini-api/docs/quickstart?lang=node).
    - Add your API keys to the `src/environments.ts` file.
 
-3. **Install dependencies:**
+1. **Install dependencies:**
    - Run `npm install` to install the app's dependencies.
 
 ### Running the App Locally
 
 1. **Serve the App:**
+
    - Run `ng serve` to start the Angular development server.
    - Open your browser and navigate to `http://localhost:4200`.
 
-### Deploying the App
-
-1. **Firebase CLI init:**
-   - Run `firebase init` and select **Hosting** and **Firestore**.
-  
-2. **Build and deploy:**
-   - Run `firebase deploy` to deploy the app to Firebase Hosting.
-
-Using the App
--------------
 1. **Create a task:**
+
    - Select the "generate task" on the left to initiate the creation of a new task.
    - Gemini is used to suggest a task title, edit the title as you see fit.
 
-2. **Generate subtasks:**
+1. **Generate subtasks:**
+
    - Based on your title and/or an uploaded image you can generate subtasks using Gemini AI.
 
-3. **Save the task:**
+1. **Save the task:**
    - Save to add the task to your dashboard.
 
-Technology
-----------
+## Deploying the App
+
+This app has been created to help you quickly experiment with Firebase and the Gemini API. You are using your own project to experiment and see how Gemini works.
+
+Caution: this app uses Google AI SDK which exposes your API key. To somewhat protect your API key, you should impose a quota limit to protect the project. If you are using the IDX setup, it's already applied.
+
+For production or enterprise-scale mobile or web apps that directly call the Gemini API, Firebase storngly recommends migrating to [Vertex AI in Firebase](https://firebase.google.com/docs/vertex-ai/migrate-to-vertex-ai?platform=flutter#vertex-ai-for-firebase_1)
+and turn on [Firebase App Check](https://firebase.google.com/docs/vertex-ai/app-check) protection.
+
+Migrating this app to Vertex AI in Firebase with Firebase App Check protection is straightforward and the code is commented into the app for you already. The Firebase Console walks you through enabling Vertex AI in Firebase and Firebase App Check. Alternatively, a sample Terraform config [prod.tf.example](prod.tf.example) is provided to set up those services at scale.
+
+## Technology
 
 - **Angular**
 - **Firebase**:
@@ -73,8 +75,7 @@ Technology
   - **Google AI**
   - **Vertex AI**
 
-Docs
--------
+## Docs
 
 - [Firebase Support](https://firebase.google.com/support)
 - [Gemini AI Documentation](https://ai.google.dev/gemini-api/docs/quickstart?lang=node)
