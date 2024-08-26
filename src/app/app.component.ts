@@ -50,7 +50,6 @@ import { Observable } from 'rxjs';
 })
 export class AppComponent {
   taskForm!: FormGroup;
-  showEditor = false;
   selectedTaskId: string | null = null;
   tasks: any[] = [];
   subtasks: { task: Task; editing: boolean }[] = [];
@@ -79,12 +78,10 @@ export class AppComponent {
       title: ['', Validators.required],
       priority: ['none', Validators.required],
       completed: [false],
-      flagged: [false],
     });
   }
 
   openEditor(task: Task | null = null): void {
-    this.showEditor = true;
     if (task) {
       this.selectedTaskId = task.id;
       this.taskForm.patchValue({
@@ -95,11 +92,6 @@ export class AppComponent {
     } else {
       this.selectedTaskId = null;
     }
-  }
-
-  closeEditor(): void {
-    this.showEditor = false;
-    this.resetForm();
   }
 
   submit(): void {
@@ -146,7 +138,7 @@ export class AppComponent {
       this.taskService.addMaintaskWithSubtasks(maintaskInput, subtaskInput);
     }
 
-    this.closeEditor();
+    this.resetForm();
   }
 
   private resetForm(): void {
@@ -416,9 +408,10 @@ export class AppComponent {
     });
   }
 
-  deleteMaintaskAndSubtasks(task: Task): void {
-    if (task.id) {
-      this.taskService.deleteMaintaskAndSubtasks(task.id);
+  deleteCurrentMainAndSubTasks(): void {
+    if (this.selectedTaskId) {
+      this.taskService.deleteMaintaskAndSubtasks(this.selectedTaskId);
+      this.resetForm();
     }
   }
 
