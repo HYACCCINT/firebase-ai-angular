@@ -18,6 +18,8 @@
     TF_VAR_project = "<project-id>";
     # Flip to true to help improve Angular
     NG_CLI_ANALYTICS = "false";
+    # Quieter Terraform logs
+    TF_IN_AUTOMATION = "true";
   };
 
   idx = {
@@ -48,9 +50,13 @@
     workspace = {
       # Runs when a workspace is first created
       onCreate = {
+        default.openFiles = [
+          "README.md"
+          "src/services/task.service.ts"
+        ];
         terraform = ''
           terraform init --upgrade
-          terraform apply -parallelism=20 --auto-approve
+          terraform apply -parallelism=20 --auto-approve -compact-warnings
         '';
         npm = "npm install";
       };
