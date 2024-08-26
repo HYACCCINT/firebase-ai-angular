@@ -52,6 +52,7 @@
       onCreate = {
         default.openFiles = [
           "README.md"
+          "src/services/task.service.ts"
         ];
         terraform = ''
           terraform init --upgrade
