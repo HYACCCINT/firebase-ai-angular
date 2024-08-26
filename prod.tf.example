@@ -4,6 +4,20 @@
 # Use the following Terraform config to set up Vertex AI in Firebase.
 ###
 
+import {
+  id = var.project
+  to = google_project.default
+}
+
+resource "google_project" "default" {
+  name       = "Sample Firebase AI App"
+  project_id = var.project
+  folder_id  = "<insert the folder where the project was created>"
+  # Associate the project with a Cloud Billing account
+  # (required for Vertex AI in Firebase).
+  billing_account = "000000-000000-000000" # insert your billing account here
+}
+
 # Enable required APIs.
 resource "google_project_service" "vertex" {
   project = var.project
