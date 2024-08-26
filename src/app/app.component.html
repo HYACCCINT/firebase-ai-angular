@@ -26,38 +26,40 @@
           class="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-[#f6fafe] rounded-[40px] p-6 min-h-[91vh] shadow-xl shadow-[#ffd358] overflow-x-scroll"
         >
           @for (task of this.tasks; track task.maintask.id) {
+          <div class="sticky top-0 bg-[#f2f4fa] z-10 py-2 mb-4"></div>
           <div
-            class="bg-[#f2f4fa] p-6 rounded-[24px] relative min-w-80 mx-3 cursor-pointer"
+            class="bg-[#f2f4fa] p-6 pt-0 rounded-[24px] relative min-w-80 mx-3 cursor-pointer max-h-[50%] no-scrollbar overflow-y-scroll overflow-x-hidden"
             (click)="openEditor(task.maintask)"
           >
-            <div class="flex justify-between items-center mb-4">
-              <div class="flex items-center">
-                <mat-checkbox
-                  (click)="completeTask(task.maintask)"
-                  [checked]="task.maintask.completed"
-                  class="text-[#5A94E2]"
-                ></mat-checkbox>
-                <h3 class="ml-4 text-lg font-medium text-[#333]">
-                  {{ task.maintask.title }}
-                </h3>
-              </div>
-              <div
-                class="py-2 px-3 text-sm font-bold rounded-2xl"
-                [ngClass]="{
-                  'bg-[#ffdad8] text-red-900 px-4':
-                    task.maintask.priority == 'high',
-                  'bg-[#ffdeaa] text-amber-900':
-                    task.maintask.priority == 'medium',
-                  'bg-[#b2f1c1] text-green-800 px-5':
-                    task.maintask.priority == 'low',
-                  'bg-gray-300 text-gray-700 px-4':
-                    task.maintask.priority == 'none'
-                }"
-              >
-                {{ task.maintask.priority | titlecase }}
+            <div class="sticky top-0 bg-[#f2f4fa] z-10 pb-2 mb-4 border-b-[#e4edff] border-b-2 pt-6">
+              <div class="flex justify-between items-center">
+                <div class="flex items-center">
+                  <mat-checkbox
+                    (click)="completeTask(task.maintask)"
+                    [checked]="task.maintask.completed"
+                    class="text-[#5A94E2]"
+                  ></mat-checkbox>
+                  <h3 class="ml-4 text-lg font-medium text-[#333]">
+                    {{ task.maintask.title }}
+                  </h3>
+                </div>
+                <div
+                  class="py-2 px-3 text-sm font-bold rounded-2xl"
+                  [ngClass]="{
+                    'bg-[#ffdad8] text-red-900 px-4':
+                      task.maintask.priority == 'high',
+                    'bg-[#ffdeaa] text-amber-900':
+                      task.maintask.priority == 'medium',
+                    'bg-[#b2f1c1] text-green-800 px-5':
+                      task.maintask.priority == 'low',
+                    'bg-gray-300 text-gray-700 px-4':
+                      task.maintask.priority == 'none'
+                  }"
+                >
+                  {{ task.maintask.priority | titlecase }}
+                </div>
               </div>
             </div>
-
             <!-- Subtasks as list items inside the main task card -->
             <ul class="mt-4 space-y-3">
               @for (subtask of task.subtasks; track subtask.id) {
