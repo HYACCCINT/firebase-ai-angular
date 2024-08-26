@@ -182,7 +182,7 @@ export class AppComponent {
 
         this.tasks = Array.from(taskMap.values());
       },
-      catchError: (error: any) => {
+      error: (error: any) => {
         console.error('Error loading tasks:', error);
         this.snackBar.open('Error loading data', 'Close', {
           duration: 3000,
