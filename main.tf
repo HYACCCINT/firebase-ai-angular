@@ -86,7 +86,7 @@ resource "google_firebaserules_ruleset" "firestore" {
 
   source {
     files {
-      content = file("firestore.rules")
+      content = local_file.firestore_rules.content
       name    = "firestore.rules"
     }
   }
@@ -110,6 +110,14 @@ resource "google_firebase_web_app" "example" {
 data "google_firebase_web_app_config" "example" {
   project    = var.project
   web_app_id = google_firebase_web_app.example.app_id
+}
+
+resource "local_file" "firestore_rules" {
+  content = templatefile("${path.module}/firestore.rules.tmpl", {
+    # Access to Firestore expires in 30 days
+    expiry = formatdate("YYYY, M, D", timeadd(plantimestamp(), "720h"))
+  })
+  filename = "${path.module}/firestore.rules"
 }
 
 resource "local_file" "firebaserc" {
