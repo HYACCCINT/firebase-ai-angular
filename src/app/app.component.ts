@@ -21,8 +21,6 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { TaskWithSubtasks, Task, TaskService } from './services/task.service';
-import { catchError, take, tap } from 'rxjs/operators';
-import { Observable } from 'rxjs';
 
 @Component({
   selector: 'app-root',
@@ -66,11 +64,8 @@ export class AppComponent {
 
   ngOnInit(): void {
     this.initForm();
-    this.loadTasks().subscribe((tasks) => {
-      if (tasks.length === 0) {
-        this.generateMaintask();
-      }
-    });
+    this.loadTasks();
+    this.generateMaintask();
   }
 
   initForm(): void {
@@ -160,9 +155,9 @@ export class AppComponent {
     });
   }
 
-  loadTasks(): Observable<Task[]> {
-    return this.taskService.tasks$.pipe(
-      tap((tasks: Task[]) => {
+  loadTasks(): void {
+    this.taskService.tasks$.subscribe({
+      next: (tasks: Task[]) => {
         const taskMap = new Map<string, TaskWithSubtasks>();
         tasks.forEach((task: Task) => {
           if (!task.parentId) {
@@ -186,16 +181,14 @@ export class AppComponent {
         });
 
         this.tasks = Array.from(taskMap.values());
-      }),
-      catchError((error: any) => {
+      },
+      error: (error: any) => {
         console.error('Error loading tasks:', error);
         this.snackBar.open('Error loading data', 'Close', {
           duration: 3000,
         });
-        return [];
-      }),
-      take(1),
-    );
+      },
+    });
   }
 
   loadSubtasks(maintaskId: string): void {
